@@ -99,7 +99,7 @@ class SymFields:
         original_init = cls.__init__
 
         # Define new __init__ as a closure
-        def __init__(self: Any, **kwargs: Any) -> None:
+        def __init__(self: SymFields, **kwargs: Any) -> None:
             all_fields = set(cls.__annotations__)
             known_fields = set(kwargs)
             unknown_fields = all_fields - known_fields
@@ -141,4 +141,4 @@ class SymFields:
             # Call dataclass __init__
             original_init(self, **kwargs)
 
-        cls.__init__ = __init__  # type: ignore[method-assign]
+        cls.__init__ = __init__  # type: ignore[assignment]
