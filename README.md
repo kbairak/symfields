@@ -24,8 +24,8 @@ pip install symfields
 from symfields import SymFields, S
 
 class Sum(SymFields):
-    a: float
-    b: float
+    a: float = S
+    b: float = S
     c: float = S('a') + S('b')
 
 # Calculate c from a and b
@@ -41,6 +41,8 @@ s = Sum(b=2.0, c=3.0)
 # Sum(a=1.0, b=2.0, c=3.0)
 ```
 
+**Note:** Adding `= S` to fields is optional but recommended - it helps type checkers (like mypy) understand that these fields can be provided as keyword arguments. The library works identically either way.
+
 ## Features
 
 - **Automatic rule inversion**: Write `c = a + b`, get `a = c - b` and `b = c - a` for free
@@ -49,7 +51,8 @@ s = Sum(b=2.0, c=3.0)
 - **Multiple rules**: Define multiple relationships in a single class
 - **Chained dependencies**: Rules that depend on other computed fields
 - **Dataclass integration**: Instances behave like dataclasses with nice `repr`, equality, etc.
-- **IDE-friendly**: Field annotations enable autocomplete and type checking in your IDE
+- **Type checker friendly**: Optional `= S` pattern helps mypy understand dynamic keyword arguments
+- **IDE support**: Field annotations enable autocomplete in your IDE
 - **Validation**: Automatically validates that all provided values satisfy the rules
 
 ## Examples
@@ -59,8 +62,8 @@ s = Sum(b=2.0, c=3.0)
 **Rectangle Area**
 ```python
 class Rectangle(SymFields):
-    width: float
-    height: float
+    width: float = S
+    height: float = S
     area: float = S('width') * S('height')
 
 Rectangle(width=5.0, height=3.0)  # Rectangle(width=5.0, height=3.0, area=15.0)
@@ -70,7 +73,7 @@ Rectangle(area=15.0, width=5.0)   # Rectangle(width=5.0, height=3.0, area=15.0)
 **Temperature Conversion**
 ```python
 class Temperature(SymFields):
-    celsius: float
+    celsius: float = S
     fahrenheit: float = S('celsius') * 9/5 + 32
 
 Temperature(celsius=0.0)       # Temperature(celsius=0.0, fahrenheit=32.0)
@@ -193,7 +196,6 @@ Planned improvements and features:
 - [ ] **Add README badges** - CI status, PyPI version, Python versions, license
 - [ ] **Better error messages** - More helpful messages when rules can't be solved or constraints are violated
 - [ ] **Test advanced sympy expressions** - Powers, sqrt, trig functions, logarithms
-- [ ] **Type stubs (.pyi files)** - Enhanced IDE support with type stub files
 
 ## License
 

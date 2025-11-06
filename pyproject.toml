@@ -10,6 +10,7 @@ authors = [
 requires-python = ">=3.9"
 dependencies = [
     "sympy>=1.14.0",
+    "typing-extensions>=4.15.0",
 ]
 keywords = ["symbolic", "math", "fields", "dataclass", "equations", "solver"]
 classifiers = [
@@ -62,8 +63,6 @@ warn_return_any = false
 warn_unused_configs = true
 disallow_untyped_defs = false
 check_untyped_defs = false
-# Allow dynamic class attributes (needed for __init_subclass__ magic)
-disable_error_code = ["attr-defined", "method-assign"]
 exclude = ["src/tests"]
 
 [[tool.mypy.overrides]]
