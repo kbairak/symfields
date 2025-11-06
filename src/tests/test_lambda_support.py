@@ -7,6 +7,9 @@ import pytest
 
 from symfields import S, SymFields
 
+# Type checkers can't understand that lambdas are processed at class definition time
+# mypy: disable-error-code="assignment"
+
 
 class TestBasicLambdaFunctionality:
     """Test basic lambda functionality."""
@@ -169,7 +172,7 @@ class TestLambdaValidation:
     def test_lambda_no_var_kwargs(self) -> None:
         """Test that lambdas cannot use **kwargs."""
 
-        with pytest.raises(TypeError, match="cannot use.*\\*\\*kwargs"):
+        with pytest.raises(TypeError, match=r"cannot use.*\*\*kwargs"):
 
             class Invalid(SymFields):
                 data: dict = S
