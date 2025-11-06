@@ -194,8 +194,8 @@ Planned improvements and features:
 
 - [ ] **Publish to PyPI** - Make the package available via `pip install symfields`
 - [ ] **Add README badges** - CI status, PyPI version, Python versions, license
-- [ ] **Better error messages** - More helpful messages when rules can't be solved or constraints are violated
-- [ ] **Test advanced sympy expressions** - Powers, sqrt, trig functions, logarithms
+- [x] **Better error messages** - More helpful messages when rules can't be solved or constraints are violated
+- [x] **Test advanced sympy expressions** - Powers, sqrt, trig functions, logarithms
 - [ ] **Lambda support** - Allow lambdas as an alternative to sympy expressions (e.g., `area: float = lambda width, height: width * height`). Dependencies would be inferred from lambda parameter names. Note: lambdas wouldn't be invertible, only one-way calculations.
 
 ## License
