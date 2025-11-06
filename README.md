@@ -188,8 +188,3 @@ make ty
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
-
-## TODO
-
-- [x] Add license
-- [x] Investigate and document which Python versions are supported (Python 3.9+)
