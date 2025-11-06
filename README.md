@@ -4,7 +4,7 @@
 
 SymFields is a Python library that lets you define classes with symbolic field relationships that are automatically inverted. Define a rule like `c = a + b`, and the library will figure out how to calculate any field from any combination of the others.
 
-Instead of writing separate methods to calculate different fields, you write the relationships once and SymFields uses symbolic math (via sympy) to solve for whatever you need.
+Instead of writing separate methods to calculate different fields, you write the relationships once and SymFields uses symbolic math (via [sympy](https://www.sympy.org/)) to solve for whatever you need.
 
 ## Installation
 
@@ -225,9 +225,7 @@ Planned improvements and features:
 
 - [ ] **Publish to PyPI** - Make the package available via `pip install symfields`
 - [ ] **Add README badges** - CI status, PyPI version, Python versions, license
-- [x] **Better error messages** - More helpful messages when rules can't be solved or constraints are violated
-- [x] **Test advanced sympy expressions** - Powers, sqrt, trig functions, logarithms
-- [x] **Lambda support** - Allow lambdas as an alternative to sympy expressions (e.g., `area: float = lambda width, height: width * height`). Dependencies would be inferred from lambda parameter names. Note: lambdas wouldn't be invertible, only one-way calculations.
+- [ ] **Systems of equations** - Support solving multiple unknowns from multiple equations simultaneously. Currently, the library uses greedy single-equation solving, which can't handle cases where you need to combine equations (e.g., solving for both `acceleration` and `time` given `top_speed` and `distance`). Sympy is capable of solving systems of equations, so this would be an extension of the existing solving logic.
 
 ## License
 
