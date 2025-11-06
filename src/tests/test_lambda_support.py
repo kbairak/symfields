@@ -7,9 +7,6 @@ import pytest
 
 from symfields import S, SymFields
 
-# Type checkers can't understand that lambdas are processed at class definition time
-# mypy: disable-error-code="assignment"
-
 
 class TestBasicLambdaFunctionality:
     """Test basic lambda functionality."""
@@ -20,7 +17,7 @@ class TestBasicLambdaFunctionality:
         class Rectangle(SymFields):
             width: float = S
             height: float = S
-            area: float = lambda width, height: width * height
+            area: float = S(lambda width, height: width * height)
 
         r = Rectangle(width=5, height=4)
         assert r.width == 5
@@ -32,7 +29,7 @@ class TestBasicLambdaFunctionality:
 
         class Square(SymFields):
             side: float = S
-            area: float = lambda side: side ** 2
+            area: float = S(lambda side: side ** 2)
 
         s = Square(side=5)
         assert s.side == 5
@@ -43,7 +40,7 @@ class TestBasicLambdaFunctionality:
 
         class WithDefault(SymFields):
             value: float = S
-            random_id: int = lambda: 42
+            random_id: int = S(lambda: 42)
 
         w = WithDefault(value=10)
         assert w.value == 10
@@ -55,7 +52,7 @@ class TestBasicLambdaFunctionality:
         class Rectangle(SymFields):
             width: float = S
             height: float = S
-            area: float = lambda width, height: width * height
+            area: float = S(lambda width, height: width * height)
 
         # Cannot solve for width given area and height
         with pytest.raises(ValueError, match="Cannot calculate all fields"):
@@ -71,7 +68,7 @@ class TestLambdaNonNumericTypes:
         class Person(SymFields):
             first_name: str = S
             last_name: str = S
-            full_name: str = lambda first_name, last_name: f"{first_name} {last_name}"
+            full_name: str = S(lambda first_name, last_name: f"{first_name} {last_name}")
 
         p = Person(first_name="John", last_name="Doe")
         assert p.first_name == "John"
@@ -83,7 +80,7 @@ class TestLambdaNonNumericTypes:
 
         class AgeCheck(SymFields):
             age: int = S
-            is_adult: bool = lambda age: age >= 18
+            is_adult: bool = S(lambda age: age >= 18)
 
         a1 = AgeCheck(age=20)
         assert a1.is_adult is True
@@ -97,7 +94,7 @@ class TestLambdaNonNumericTypes:
         class Money(SymFields):
             price: Decimal = S
             quantity: Decimal = S
-            total: Decimal = lambda price, quantity: price * quantity
+            total: Decimal = S(lambda price, quantity: price * quantity)
 
         m = Money(price=Decimal("10.50"), quantity=Decimal("3"))
         assert m.total == Decimal("31.50")
@@ -113,7 +110,7 @@ class TestMixedSympyAndLambda:
             width: float = S
             height: float = S
             area: float = S("width") * S("height")  # Sympy - invertible
-            label: str = lambda width, height: f"{width}x{height}"  # Lambda - forward only
+            label: str = S(lambda width, height: f"{width}x{height}")  # Lambda - forward only
 
         # Can solve for width using sympy expression
         m1 = Mixed(area=20, height=4)
@@ -132,7 +129,7 @@ class TestMixedSympyAndLambda:
             a: float = S
             b: float = S
             sum_ab: float = S("a") + S("b")  # Sympy
-            message: str = lambda sum_ab: f"Sum is {sum_ab}"  # Lambda uses sympy result
+            message: str = S(lambda sum_ab: f"Sum is {sum_ab}")  # Lambda uses sympy result
 
         c = Calculated(a=10, b=20)
         assert c.sum_ab == 30
@@ -149,7 +146,7 @@ class TestLambdaValidation:
 
             class Invalid(SymFields):
                 width: float = S
-                area: float = lambda width, unknown: width * unknown
+                area: float = S(lambda width, unknown: width * unknown)
 
     def test_lambda_no_default_arguments(self) -> None:
         """Test that lambda parameters cannot have defaults."""
@@ -158,7 +155,7 @@ class TestLambdaValidation:
 
             class Invalid(SymFields):
                 width: float = S
-                area: float = lambda width, height=10: width * height
+                area: float = S(lambda width, height=10: width * height)
 
     def test_lambda_no_var_args(self) -> None:
         """Test that lambdas cannot use *args."""
@@ -167,7 +164,7 @@ class TestLambdaValidation:
 
             class Invalid(SymFields):
                 values: list = S
-                result: float = lambda *values: sum(values)
+                result: float = S(lambda *values: sum(values))
 
     def test_lambda_no_var_kwargs(self) -> None:
         """Test that lambdas cannot use **kwargs."""
@@ -176,7 +173,7 @@ class TestLambdaValidation:
 
             class Invalid(SymFields):
                 data: dict = S
-                result: str = lambda **data: str(data)
+                result: str = S(lambda **data: str(data))
 
 
 class TestLambdaWithExternalFunctions:
@@ -187,7 +184,7 @@ class TestLambdaWithExternalFunctions:
 
         class Circle(SymFields):
             radius: float = S
-            area: float = lambda radius: math.pi * radius ** 2
+            area: float = S(lambda radius: math.pi * radius ** 2)
 
         c = Circle(radius=5)
         assert math.isclose(c.area, math.pi * 25)
@@ -201,7 +198,7 @@ class TestLambdaWithExternalFunctions:
         class Person(SymFields):
             weight: float = S
             height: float = S
-            bmi: float = calculate_bmi
+            bmi: float = S(calculate_bmi)
 
         p = Person(weight=70, height=1.75)
         expected_bmi = 70 / (1.75 ** 2)
@@ -217,7 +214,7 @@ class TestLambdaValidationErrors:
         class Rectangle(SymFields):
             width: float = S
             height: float = S
-            area: float = lambda width, height: width * height
+            area: float = S(lambda width, height: width * height)
 
         with pytest.raises(ValueError, match=r"<callable\(width, height\)>"):
             Rectangle(width=5, height=4, area=25)  # Wrong area
@@ -228,7 +225,7 @@ class TestLambdaValidationErrors:
         class Person(SymFields):
             first_name: str = S
             last_name: str = S
-            full_name: str = lambda first_name, last_name: f"{first_name} {last_name}"
+            full_name: str = S(lambda first_name, last_name: f"{first_name} {last_name}")
 
         # Should raise error but not try to show "Difference" for strings
         with pytest.raises(ValueError) as exc_info:
@@ -247,7 +244,7 @@ class TestLambdaValidationErrors:
         class Rectangle(SymFields):
             width: float = S
             height: float = S
-            area: float = lambda width, height: width * height
+            area: float = S(lambda width, height: width * height)
 
         with pytest.raises(ValueError) as exc_info:
             Rectangle(width=5, height=4, area=25)
@@ -264,8 +261,8 @@ class TestLambdaEdgeCases:
 
         class Chained(SymFields):
             a: float = S
-            b: float = lambda a: a * 2
-            c: float = lambda b: b + 10
+            b: float = S(lambda a: a * 2)
+            c: float = S(lambda b: b + 10)
 
         ch = Chained(a=5)
         assert ch.a == 5
@@ -277,8 +274,8 @@ class TestLambdaEdgeCases:
 
         class Complex(SymFields):
             value: int = S
-            category: str = lambda value: (
-                "low" if value < 10 else "medium" if value < 20 else "high"
+            category: str = S(
+                lambda value: ("low" if value < 10 else "medium" if value < 20 else "high")
             )
 
         c1 = Complex(value=5)

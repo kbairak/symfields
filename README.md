@@ -137,7 +137,7 @@ For non-mathematical or forward-only calculations, you can use lambdas or regula
 class Person(SymFields):
     first_name: str = S
     last_name: str = S
-    full_name: str = lambda first_name, last_name: f"{first_name} {last_name}"
+    full_name: str = S(lambda first_name, last_name: f"{first_name} {last_name}")
 
 Person(first_name="John", last_name="Doe")
 # Person(first_name='John', last_name='Doe', full_name='John Doe')
@@ -147,7 +147,7 @@ class Rectangle(SymFields):
     width: float = S
     height: float = S
     area: float = S('width') * S('height')  # Can solve backwards
-    label: str = lambda width, height: f"{width}x{height}"  # Forward only
+    label: str = S(lambda width, height: f"{width}x{height}")  # Forward only
 
 Rectangle(width=5, height=4)
 # Rectangle(width=5, height=4, area=20.0, label='5x4')
@@ -156,7 +156,7 @@ Rectangle(area=20, height=4)  # Uses sympy to solve for width
 # Rectangle(width=5.0, height=4, area=20.0, label='5.0x4')
 ```
 
-**Note:** Lambdas are forward-only and cannot be inverted. You cannot solve for `first_name` given `full_name`.
+**Note:** Wrap lambdas/callables with `S()` for type safety. Lambdas are forward-only and cannot be inverted. You cannot solve for `first_name` given `full_name`.
 
 **Complex Financial Calculations**
 ```python

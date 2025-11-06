@@ -13,16 +13,28 @@ __all__ = ["S", "SymFields"]
 
 
 class _SentinelSymbol:
-    """Sentinel that can also create Symbols when called.
+    """Sentinel that can also create Symbols or wrap callables.
 
-    This dual-purpose object serves as:
+    This multi-purpose object serves as:
     1. A sentinel value for type checking (field: float = S)
     2. A Symbol factory function (S('name') returns Symbol('name'))
+    3. A callable wrapper for type safety (S(lambda ...) returns the lambda)
     """
 
-    def __call__(self, name: str) -> Symbol:
-        """Create a symbolic variable."""
-        return Symbol(name)
+    def __call__(self, name_or_callable: Union[str, Callable[..., Any]]) -> Any:
+        """Create a symbolic variable or wrap a callable for type safety.
+
+        Args:
+            name_or_callable: Either a string to create a Symbol, or a callable to wrap
+
+        Returns:
+            Symbol if given a string, or the callable as-is if given a callable
+        """
+        if isinstance(name_or_callable, str):
+            return Symbol(name_or_callable)
+        else:
+            # Return callable as-is for type safety with mypy
+            return name_or_callable
 
 
 # Type as Any so it's compatible with any field type annotation
