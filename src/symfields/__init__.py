@@ -2,6 +2,7 @@
 
 import dataclasses
 import math
+# TODO: Don't need the double import, just `import dataclasses`, adjust the rest of the code
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,7 +33,7 @@ class SymFields:
     def __init_subclass__(cls):
         """Process class definition to extract and invert symbolic rules."""
         # Extract rules: fields with symbolic expressions as defaults
-        rules = {
+        rules = {  # TODO: assign to `cls._symfields_rules` directly
             name: value
             for name in cls.__annotations__
             if hasattr(cls, name) and isinstance(value := getattr(cls, name), Expr)
@@ -40,7 +41,7 @@ class SymFields:
 
         # Build mapping: field -> list of ways to calculate it
         # Each way is: (expression, set of required fields)
-        rules_by_target = {}
+        rules_by_target = {}  # TODO: assign to `cls._symfields_rules_by_target` directly
 
         for target_field, expr in rules.items():
             expr_symbols = {str(s) for s in expr.free_symbols}
@@ -64,7 +65,7 @@ class SymFields:
             delattr(cls, name)
 
         # Make it a dataclass
-        dataclass(cls)
+        dataclass(cls)  # QUESTION: do we need `cls = dataclass(cls)`?
 
         # Capture the dataclass __init__
         original_init = cls.__init__
