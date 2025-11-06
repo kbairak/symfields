@@ -5,12 +5,31 @@ description = "A library for defining classes with symbolic field relationships 
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
-    { name = "Claude", email = "noreply@anthropic.com" }
+    { name = "SymFields Contributors" }
 ]
 requires-python = ">=3.9"
 dependencies = [
     "sympy>=1.14.0",
 ]
+keywords = ["symbolic", "math", "fields", "dataclass", "equations", "solver"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.urls]
+Homepage = "https://github.com/kbairak/symfields"
+Repository = "https://github.com/kbairak/symfields"
+Issues = "https://github.com/kbairak/symfields/issues"
 
 [build-system]
 requires = ["uv_build>=0.8.17,<0.9.0"]
