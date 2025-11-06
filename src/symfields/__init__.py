@@ -63,151 +63,106 @@ class SymFields:
         understand that these fields can be passed as keyword arguments.
     """
 
-    # Class-level attributes added by __init_subclass__
-    _symfields_rules: dict[str, Union[Expr, Callable[..., Any]]]
-    _symfields_rules_by_target: dict[str, list[tuple[Union[Expr, Callable[..., Any]], set[str]]]]
-
     def __init_subclass__(cls) -> None:
-        """Process class definition to extract and invert symbolic rules."""
-        # Extract rules: fields with symbolic expressions or callables as defaults
-        # Skip fields with S as default (sentinel for type checking)
-        cls._symfields_rules = {
-            name: getattr(cls, name)
-            for name in cls.__annotations__
-            if hasattr(cls, name)
-            and getattr(cls, name) is not S
-            and (isinstance(getattr(cls, name), Expr) or callable(getattr(cls, name)))
-        }
+        """Process class definition to extract symbolic rules and lambdas."""
+        equations, lambdas = [], {}
+        for name in cls.__annotations__:
+            if not hasattr(cls, name):
+                continue
+            if isinstance(getattr(cls, name), Expr):
+                equations.append(Eq(Symbol(name), getattr(cls, name)))
+            elif callable(getattr(cls, name)) and getattr(cls, name) is not S:
+                func = getattr(cls, name)
+                parameters = list(inspect.signature(func).parameters.values())
 
-        # Validate callable signatures
-        for field_name, field_value in cls._symfields_rules.items():
-            if callable(field_value) and not isinstance(field_value, Expr):
-                parameters = list(inspect.signature(field_value).parameters.values())
-
-                # Validate parameters and extract dependency field names
+                # Validate parameters
                 for param in parameters:
                     if param.kind in (
                         inspect.Parameter.VAR_POSITIONAL,
                         inspect.Parameter.VAR_KEYWORD,
                     ):
-                        raise TypeError(
-                            f"Field '{field_name}': callables cannot use *args or **kwargs"
-                        )
+                        raise TypeError(f"Field '{name}': callables cannot use *args or **kwargs")
                     if param.default != inspect.Parameter.empty:
                         raise TypeError(
-                            f"Field '{field_name}': callable parameter '{param.name}' "
+                            f"Field '{name}': callable parameter '{param.name}' "
                             "cannot have default value"
                         )
                     if param.name not in cls.__annotations__:
                         raise TypeError(
-                            f"Field '{field_name}': callable parameter '{param.name}' "
+                            f"Field '{name}': callable parameter '{param.name}' "
                             "is not a defined field"
                         )
 
-        # Build mapping: field -> list of ways to calculate it
-        # Each way is: (rule, set of required fields)
-        cls._symfields_rules_by_target = {}
-
-        for target_field, rule in cls._symfields_rules.items():
-            if isinstance(rule, Expr):
-                # Sympy expression: add forward + inverted rules
-                expr_symbols = {str(s) for s in rule.free_symbols}
-
-                # Original rule: target = expr
-                cls._symfields_rules_by_target.setdefault(target_field, []).append(
-                    (rule, expr_symbols)
-                )
-
-                # Inverted rules: solve for each symbol in the expression
-                for symbol_name in expr_symbols:
-                    solutions = solve(Eq(rule, S(target_field)), symbol_name)
-                    if solutions:
-                        inverted_expr = solutions[0]
-                        required = (expr_symbols - {symbol_name}) | {target_field}
-                        cls._symfields_rules_by_target.setdefault(symbol_name, []).append(
-                            (inverted_expr, required)
-                        )
-
-            elif callable(rule):
-                # Callable: add forward rule only (no inversion)
-                params = inspect.signature(rule).parameters.keys()
-                dependency_fields = set(params)
-                cls._symfields_rules_by_target.setdefault(target_field, []).append(
-                    (rule, dependency_fields)
-                )
-
-        # Remove symbolic defaults and sentinels so dataclass doesn't complain
-        for name in cls._symfields_rules:
+                dependency_fields = set(inspect.signature(func).parameters)
+                lambdas[name] = (func, dependency_fields)
             delattr(cls, name)
-        for name in cls.__annotations__:
-            if hasattr(cls, name) and getattr(cls, name) is S:
-                delattr(cls, name)
 
-        # Make it a dataclass (modifies cls in-place, no need to reassign)
+        # Store equations and lambdas for later use
+        cls._symfields_equations = equations
+        cls._symfields_lambdas = lambdas
+
         dataclass(cls)
-
-        # Capture the dataclass __init__
         original_init = cls.__init__
 
-        # Define new __init__ as a closure
         def __init__(self: SymFields, **kwargs: Any) -> None:
-            all_fields = set(cls.__annotations__)
             known_fields = set(kwargs)
-            unknown_fields = all_fields - known_fields
+            unknown_fields = set(cls.__annotations__) - known_fields
 
-            # Iteratively solve for unknowns
+            # Solve sympy equations as a system
+            subs = {Symbol(key): value for key, value in kwargs.items()}
+            solutions = solve(
+                [eq.subs(subs) for eq in cls._symfields_equations], unknown_fields - lambdas.keys()
+            )
+            if isinstance(solutions, list):
+                solutions = solutions[-1] if solutions else {}
+            for symbol, value in solutions.items():
+                try:
+                    kwargs[str(symbol)] = cls.__annotations__[str(symbol)](value)
+                except (TypeError, ValueError):
+                    kwargs[str(symbol)] = float(value)
+                known_fields.add(str(symbol))
+                unknown_fields.remove(str(symbol))
+
+            # Check if sympy couldn't solve everything
+            non_lambda_unknowns = unknown_fields - lambdas.keys()
+            if non_lambda_unknowns:
+                provided = ", ".join(f"'{f}'" for f in sorted(known_fields))
+                missing = ", ".join(f"'{f}'" for f in sorted(non_lambda_unknowns))
+
+                raise ValueError(
+                    f"Cannot calculate all fields with the provided arguments.\n"
+                    f"Provided: {provided}\n"
+                    f"Missing: {missing}\n"
+                    f"The system of equations is under-determined "
+                    f"(not enough equations to solve for all unknowns)."
+                )
+
+            # Solve lambdas iteratively
             while unknown_fields:
                 progress = False
-
                 for field in list(unknown_fields):
-                    # Check all ways to calculate this field
-                    for rule, required_fields in cls._symfields_rules_by_target.get(field, []):
-                        if required_fields <= known_fields:
-                            # We have all required fields! Calculate it
-                            if isinstance(rule, Expr):
-                                # Sympy expression - convert using annotation, fallback to float
-                                raw_result = rule.subs(
-                                    {sym: kwargs[str(sym)] for sym in rule.free_symbols}
-                                )
-                                field_type = cls.__annotations__[field]
-                                try:
-                                    result = field_type(raw_result)
-                                except (TypeError, ValueError):
-                                    result = float(raw_result)
-                            elif callable(rule):
-                                # Callable - use result directly
-                                params = inspect.signature(rule).parameters.keys()
-                                call_kwargs = {param: kwargs[param] for param in params}
-                                result = rule(**call_kwargs)
-
-                            kwargs[field] = result
-                            known_fields.add(field)
-                            unknown_fields.remove(field)
-                            progress = True
-                            break  # Found one way, no need to try others
-
+                    func, dependency_fields = lambdas[field]
+                    if known_fields >= dependency_fields:
+                        kwargs[field] = func(**{param: kwargs[param] for param in dependency_fields})
+                        known_fields.add(field)
+                        unknown_fields.remove(field)
+                        progress = True
                 if not progress:
-                    break  # Can't solve any more
+                    break
 
-            # Check if we solved everything
+            # Check if lambdas couldn't be calculated
             if unknown_fields:
-                # Build helpful error message
                 provided = ", ".join(f"'{f}'" for f in sorted(known_fields))
                 missing = ", ".join(f"'{f}'" for f in sorted(unknown_fields))
 
-                # Show what's needed for each missing field
+                # Build suggestions for lambdas
                 suggestions = []
                 for field in sorted(unknown_fields):
-                    ways = cls._symfields_rules_by_target.get(field, [])
-                    if ways:
-                        for _, required_fields in ways:
-                            still_needed = required_fields - known_fields
-                            if still_needed:
-                                need_str = ", ".join(f"'{f}'" for f in sorted(still_needed))
-                                suggestions.append(
-                                    f"  - To calculate '{field}', also provide: {need_str}"
-                                )
-                                break  # Just show first option per field
+                    func, dependency_fields = lambdas[field]
+                    still_needed = dependency_fields - known_fields
+                    if still_needed:
+                        need_str = ", ".join(f"'{f}'" for f in sorted(still_needed))
+                        suggestions.append(f"  - To calculate '{field}', also provide: {need_str}")
 
                 error_lines = [
                     "Cannot calculate all fields with the provided arguments.",
@@ -220,45 +175,37 @@ class SymFields:
 
                 raise ValueError("\n".join(error_lines))
 
-            # Validate: re-evaluate original rules and collect all errors
+            # Validate all equations
             validation_errors = []
-            for target_field, rule in cls._symfields_rules.items():
-                if isinstance(rule, Expr):
-                    # Sympy expression
-                    raw_result = rule.subs({str(s): kwargs[str(s)] for s in rule.free_symbols})
-                    field_type = cls.__annotations__[target_field]
-                    try:
-                        expected = field_type(raw_result)
-                    except (TypeError, ValueError):
-                        expected = float(raw_result)
-                    rule_str = f"{target_field} = {rule!s}"
-                elif callable(rule):
-                    # Callable
-                    params = inspect.signature(rule).parameters.keys()
-                    call_kwargs = {param: kwargs[param] for param in params}
-                    expected = rule(**call_kwargs)
-                    params_str = ", ".join(params)
-                    rule_str = f"{target_field} = <callable({params_str})>"
+            for eq in cls._symfields_equations:
+                # Get field name from left-hand side
+                field_name = str(eq.lhs)
 
-                actual = kwargs[target_field]
+                # Substitute all kwargs and evaluate
+                lhs_value = eq.lhs.subs({Symbol(k): v for k, v in kwargs.items()})
+                rhs_value = eq.rhs.subs({Symbol(k): v for k, v in kwargs.items()})
 
-                # Compare using math.isclose for numeric types, == for others
+                # Convert to floats for comparison
                 try:
-                    is_valid = math.isclose(expected, actual)
+                    lhs_float = float(lhs_value)
+                    rhs_float = float(rhs_value)
+                    is_valid = math.isclose(lhs_float, rhs_float)
                 except (TypeError, ValueError):
-                    is_valid = expected == actual
+                    # Non-numeric types, use equality
+                    is_valid = lhs_value == rhs_value
+                    lhs_float, rhs_float = lhs_value, rhs_value
 
                 if not is_valid:
                     error_info = [
-                        f"  Field '{target_field}':",
-                        f"    Rule: {rule_str}",
-                        f"    Expected: {expected}",
-                        f"    Got: {actual}",
+                        f"  Field '{field_name}':",
+                        f"    Rule: {field_name} = {eq.rhs}",
+                        f"    Expected: {rhs_float}",
+                        f"    Got: {lhs_float}",
                     ]
 
                     # Try to add difference for numeric types
                     try:
-                        diff = abs(expected - actual)
+                        diff = abs(lhs_float - rhs_float)
                         error_info.append(f"    Difference: {diff}")
                     except (TypeError, ValueError):
                         pass  # Non-numeric types, skip difference
@@ -268,12 +215,10 @@ class SymFields:
             if validation_errors:
                 error_message = (
                     f"Validation failed for {len(validation_errors)} "
-                    f"field{'s' if len(validation_errors) > 1 else ''}.\n"
-                    + "\n".join(validation_errors)
+                    f"field{'s' if len(validation_errors) > 1 else ''}.\n" + "\n".join(validation_errors)
                 )
                 raise ValueError(error_message)
 
-            # Call dataclass __init__
             original_init(self, **kwargs)
 
         cls.__init__ = __init__  # type: ignore[assignment]
