@@ -63,6 +63,10 @@ class SymFields:
         understand that these fields can be passed as keyword arguments.
     """
 
+    # Class-level attributes added by __init_subclass__
+    _symfields_equations: list[Any]
+    _symfields_lambdas: dict[str, tuple[Callable[..., Any], list[str]]]
+
     def __init_subclass__(cls) -> None:
         """Process class definition to extract symbolic rules and lambdas."""
         equations, lambdas = [], {}
@@ -93,7 +97,7 @@ class SymFields:
                             "is not a defined field"
                         )
 
-                dependency_fields = set(inspect.signature(func).parameters)
+                dependency_fields = list(inspect.signature(func).parameters.keys())
                 lambdas[name] = (func, dependency_fields)
             delattr(cls, name)
 
@@ -110,12 +114,42 @@ class SymFields:
 
             # Solve sympy equations as a system
             subs = {Symbol(key): value for key, value in kwargs.items()}
+            unknowns_list = list(unknown_fields - lambdas.keys())
             solutions = solve(
-                [eq.subs(subs) for eq in cls._symfields_equations], unknown_fields - lambdas.keys()
+                [eq.subs(subs) for eq in cls._symfields_equations], unknowns_list
             )
-            if isinstance(solutions, list):
-                solutions = solutions[-1] if solutions else {}
+
+            # Handle different solution formats from sympy
+            if isinstance(solutions, list) and solutions:
+                # Filter for real solutions if there are multiple
+                real_solutions = []
+                for sol in solutions:
+                    if isinstance(sol, tuple) and all(
+                        not hasattr(v, 'is_real') or v.is_real is not False for v in sol
+                    ):
+                        real_solutions.append(sol)
+
+                # Use the first real solution, or last solution if no real ones
+                chosen_solution = real_solutions[0] if real_solutions else solutions[-1]
+
+                # Convert tuple to dict
+                if isinstance(chosen_solution, tuple):
+                    solutions = dict(zip([Symbol(str(s)) for s in unknowns_list], chosen_solution))
+                else:
+                    solutions = chosen_solution
+            elif not solutions:
+                solutions = {}
+
+            # Extract solved values (skip if still symbolic or complex)
             for symbol, value in solutions.items():
+                # Check if value is still symbolic (couldn't be fully solved)
+                if hasattr(value, 'free_symbols') and value.free_symbols:
+                    continue
+
+                # Check if value is complex and skip it (prefer real solutions)
+                if hasattr(value, 'is_real') and value.is_real is False:
+                    continue
+
                 try:
                     kwargs[str(symbol)] = cls.__annotations__[str(symbol)](value)
                 except (TypeError, ValueError):
@@ -142,8 +176,9 @@ class SymFields:
                 progress = False
                 for field in list(unknown_fields):
                     func, dependency_fields = lambdas[field]
-                    if known_fields >= dependency_fields:
-                        kwargs[field] = func(**{param: kwargs[param] for param in dependency_fields})
+                    if known_fields >= set(dependency_fields):
+                        call_kwargs = {param: kwargs[param] for param in dependency_fields}
+                        kwargs[field] = func(**call_kwargs)
                         known_fields.add(field)
                         unknown_fields.remove(field)
                         progress = True
@@ -159,7 +194,7 @@ class SymFields:
                 suggestions = []
                 for field in sorted(unknown_fields):
                     func, dependency_fields = lambdas[field]
-                    still_needed = dependency_fields - known_fields
+                    still_needed = set(dependency_fields) - known_fields
                     if still_needed:
                         need_str = ", ".join(f"'{f}'" for f in sorted(still_needed))
                         suggestions.append(f"  - To calculate '{field}', also provide: {need_str}")
@@ -175,15 +210,23 @@ class SymFields:
 
                 raise ValueError("\n".join(error_lines))
 
-            # Validate all equations
+            # Validate all equations and lambdas
             validation_errors = []
+
+            # Validate sympy equations
             for eq in cls._symfields_equations:
                 # Get field name from left-hand side
                 field_name = str(eq.lhs)
 
-                # Substitute all kwargs and evaluate
-                lhs_value = eq.lhs.subs({Symbol(k): v for k, v in kwargs.items()})
-                rhs_value = eq.rhs.subs({Symbol(k): v for k, v in kwargs.items()})
+                # Get all symbols in this equation
+                eq_symbols = eq.free_symbols
+
+                # Only substitute values for symbols that are in this equation
+                subs_dict = {Symbol(k): v for k, v in kwargs.items() if Symbol(k) in eq_symbols}
+
+                # Substitute and evaluate
+                lhs_value = eq.lhs.subs(subs_dict)
+                rhs_value = eq.rhs.subs(subs_dict)
 
                 # Convert to floats for comparison
                 try:
@@ -212,10 +255,40 @@ class SymFields:
 
                     validation_errors.append("\n".join(error_info))
 
+            # Validate lambdas
+            for field_name, (func, dependency_fields) in lambdas.items():
+                expected = func(**{param: kwargs[param] for param in dependency_fields})
+                actual = kwargs[field_name]
+
+                # Compare using math.isclose for numeric types, == for others
+                try:
+                    is_valid = math.isclose(expected, actual)
+                except (TypeError, ValueError):
+                    is_valid = expected == actual
+
+                if not is_valid:
+                    params_str = ", ".join(dependency_fields)
+                    error_info = [
+                        f"  Field '{field_name}':",
+                        f"    Rule: {field_name} = <callable({params_str})>",
+                        f"    Expected: {expected}",
+                        f"    Got: {actual}",
+                    ]
+
+                    # Try to add difference for numeric types
+                    try:
+                        diff = abs(expected - actual)
+                        error_info.append(f"    Difference: {diff}")
+                    except (TypeError, ValueError):
+                        pass  # Non-numeric types, skip difference
+
+                    validation_errors.append("\n".join(error_info))
+
             if validation_errors:
+                field_word = "field" if len(validation_errors) == 1 else "fields"
                 error_message = (
-                    f"Validation failed for {len(validation_errors)} "
-                    f"field{'s' if len(validation_errors) > 1 else ''}.\n" + "\n".join(validation_errors)
+                    f"Validation failed for {len(validation_errors)} {field_word}.\n"
+                    + "\n".join(validation_errors)
                 )
                 raise ValueError(error_message)
 
