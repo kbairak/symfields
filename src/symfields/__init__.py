@@ -3,12 +3,25 @@
 import math
 from dataclasses import dataclass
 
-from sympy import Eq, Expr, solve
-from sympy import Symbol as S
+from sympy import Eq, Expr, Symbol, solve
+from typing_extensions import dataclass_transform
 
 __all__ = ["SymFields", "S"]
 
 
+def S(name: str) -> Symbol:
+    """Create a symbolic variable.
+
+    Can also be used as a sentinel default value for type checking support.
+
+    Usage:
+        area: float = S('width') * S('height')  # Define a rule
+        width: float = S  # Mark as providable (helps type checkers)
+    """
+    return Symbol(name)
+
+
+@dataclass_transform(kw_only_default=True)
 class SymFields:
     """Base class for defining classes with symbolic field relationships.
 
@@ -17,22 +30,29 @@ class SymFields:
 
     Example:
         class Sum(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S('a') + S('b')
 
         s = Sum(a=1, b=2)  # c is calculated as 3
         s = Sum(a=1, c=3)  # b is calculated as 2
         s = Sum(b=2, c=3)  # a is calculated as 1
+
+    Note:
+        Adding `= S` to providable fields is optional but helps type checkers
+        understand that these fields can be passed as keyword arguments.
     """
 
     def __init_subclass__(cls):
         """Process class definition to extract and invert symbolic rules."""
         # Extract rules: fields with symbolic expressions as defaults
+        # Skip fields with S as default (sentinel for type checking)
         cls._symfields_rules = {
             name: getattr(cls, name)
             for name in cls.__annotations__
-            if hasattr(cls, name) and isinstance(getattr(cls, name), Expr)
+            if hasattr(cls, name)
+            and getattr(cls, name) is not S
+            and isinstance(getattr(cls, name), Expr)
         }
 
         # Build mapping: field -> list of ways to calculate it
@@ -55,9 +75,12 @@ class SymFields:
                         (inverted_expr, required)
                     )
 
-        # Remove symbolic defaults so dataclass doesn't complain
+        # Remove symbolic defaults and sentinels so dataclass doesn't complain
         for name in cls._symfields_rules:
             delattr(cls, name)
+        for name in cls.__annotations__:
+            if hasattr(cls, name) and getattr(cls, name) is S:
+                delattr(cls, name)
 
         # Make it a dataclass (modifies cls in-place, no need to reassign)
         dataclass(cls)
