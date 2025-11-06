@@ -1,11 +1,9 @@
 """SymFields - Symbolic field relationships with automatic inversion."""
 
-import dataclasses
 import math
+from dataclasses import dataclass
 
-import sympy
-from sympy import Symbol as S
-from sympy import Eq, Expr
+from sympy import Eq, Expr, Symbol as S, solve
 
 __all__ = ['SymFields', 'S']
 
@@ -48,7 +46,7 @@ class SymFields:
 
             # Inverted rules: solve for each symbol in the expression
             for symbol_name in expr_symbols:
-                solutions = sympy.solve(Eq(expr, S(target_field)), symbol_name)
+                solutions = solve(Eq(expr, S(target_field)), symbol_name)
                 if solutions:
                     inverted_expr = solutions[0]
                     required = (expr_symbols - {symbol_name}) | {target_field}
@@ -59,7 +57,7 @@ class SymFields:
             delattr(cls, name)
 
         # Make it a dataclass (modifies cls in-place, no need to reassign)
-        dataclasses.dataclass(cls)
+        dataclass(cls)
 
         # Capture the dataclass __init__
         original_init = cls.__init__
