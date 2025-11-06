@@ -3,9 +3,10 @@
 import math
 from dataclasses import dataclass
 
-from sympy import Eq, Expr, Symbol as S, solve
+from sympy import Eq, Expr, solve
+from sympy import Symbol as S
 
-__all__ = ['SymFields', 'S']
+__all__ = ["SymFields", "S"]
 
 
 class SymFields:
@@ -50,7 +51,9 @@ class SymFields:
                 if solutions:
                     inverted_expr = solutions[0]
                     required = (expr_symbols - {symbol_name}) | {target_field}
-                    cls._symfields_rules_by_target.setdefault(symbol_name, []).append((inverted_expr, required))
+                    cls._symfields_rules_by_target.setdefault(symbol_name, []).append(
+                        (inverted_expr, required)
+                    )
 
         # Remove symbolic defaults so dataclass doesn't complain
         for name in cls._symfields_rules:
@@ -77,8 +80,9 @@ class SymFields:
                     for expr, required_fields in cls._symfields_rules_by_target.get(field, []):
                         if required_fields <= known_fields:
                             # We have all required fields! Calculate it
-                            kwargs[field] = float(expr.subs({sym: kwargs[str(sym)]
-                                                             for sym in expr.free_symbols}))
+                            kwargs[field] = float(
+                                expr.subs({sym: kwargs[str(sym)] for sym in expr.free_symbols})
+                            )
                             known_fields.add(field)
                             unknown_fields.remove(field)
                             progress = True
@@ -89,14 +93,17 @@ class SymFields:
 
             # Check if we solved everything
             if unknown_fields:
-                fields_str = ', '.join(f"'{f}'" for f in sorted(unknown_fields))
+                fields_str = ", ".join(f"'{f}'" for f in sorted(unknown_fields))
                 raise ValueError(f"Not enough arguments to calculate fields {fields_str}")
 
             # Validate: re-evaluate original rules
             for target_field, expr in cls._symfields_rules.items():
                 expected = float(expr.subs({str(s): kwargs[str(s)] for s in expr.free_symbols}))
                 if not math.isclose(expected, kwargs[target_field]):
-                    raise ValueError(f"Validation error, expected {target_field}={expected}, got {target_field}={kwargs[target_field]}")
+                    raise ValueError(
+                        f"Validation error, expected {target_field}={expected}, "
+                        f"got {target_field}={kwargs[target_field]}"
+                    )
 
             # Call dataclass __init__
             original_init(self, **kwargs)
