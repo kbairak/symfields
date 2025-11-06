@@ -2,6 +2,7 @@
 
 import math
 from dataclasses import dataclass
+from typing import Any
 
 from sympy import Eq, Expr, Symbol, solve
 from typing_extensions import dataclass_transform
@@ -9,16 +10,21 @@ from typing_extensions import dataclass_transform
 __all__ = ["SymFields", "S"]
 
 
-def S(name: str) -> Symbol:
-    """Create a symbolic variable.
+class _SentinelSymbol:
+    """Sentinel that can also create Symbols when called.
 
-    Can also be used as a sentinel default value for type checking support.
-
-    Usage:
-        area: float = S('width') * S('height')  # Define a rule
-        width: float = S  # Mark as providable (helps type checkers)
+    This dual-purpose object serves as:
+    1. A sentinel value for type checking (field: float = S)
+    2. A Symbol factory function (S('name') returns Symbol('name'))
     """
-    return Symbol(name)
+
+    def __call__(self, name: str) -> Symbol:
+        """Create a symbolic variable."""
+        return Symbol(name)
+
+
+# Type as Any so it's compatible with any field type annotation
+S: Any = _SentinelSymbol()
 
 
 @dataclass_transform(kw_only_default=True)
@@ -43,7 +49,11 @@ class SymFields:
         understand that these fields can be passed as keyword arguments.
     """
 
-    def __init_subclass__(cls):
+    # Class-level attributes added by __init_subclass__
+    _symfields_rules: dict[str, Expr]
+    _symfields_rules_by_target: dict[str, list[tuple[Expr, set[str]]]]
+
+    def __init_subclass__(cls) -> None:
         """Process class definition to extract and invert symbolic rules."""
         # Extract rules: fields with symbolic expressions as defaults
         # Skip fields with S as default (sentinel for type checking)
@@ -131,4 +141,4 @@ class SymFields:
             # Call dataclass __init__
             original_init(self, **kwargs)
 
-        cls.__init__ = __init__
+        cls.__init__ = __init__  # type: ignore[method-assign]

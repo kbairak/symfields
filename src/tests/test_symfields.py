@@ -8,7 +8,7 @@ from symfields import S, SymFields
 class TestBasicArithmetic:
     """Test basic arithmetic operations."""
 
-    def test_sum_forward_calculation(self):
+    def test_sum_forward_calculation(self) -> None:
         """Test calculating c from a and b."""
 
         class Sum(SymFields):
@@ -21,7 +21,7 @@ class TestBasicArithmetic:
         assert s.b == 2
         assert s.c == 3
 
-    def test_sum_backward_calculation_solve_b(self):
+    def test_sum_backward_calculation_solve_b(self) -> None:
         """Test calculating b from a and c."""
 
         class Sum(SymFields):
@@ -34,7 +34,7 @@ class TestBasicArithmetic:
         assert s.b == 2
         assert s.c == 3
 
-    def test_sum_backward_calculation_solve_a(self):
+    def test_sum_backward_calculation_solve_a(self) -> None:
         """Test calculating a from b and c."""
 
         class Sum(SymFields):
@@ -47,7 +47,7 @@ class TestBasicArithmetic:
         assert s.b == 2
         assert s.c == 3
 
-    def test_subtraction(self):
+    def test_subtraction(self) -> None:
         """Test subtraction operations."""
 
         class Diff(SymFields):
@@ -67,7 +67,7 @@ class TestBasicArithmetic:
         s3 = Diff(a=5, c=3)
         assert s3.b == 2
 
-    def test_multiplication(self):
+    def test_multiplication(self) -> None:
         """Test multiplication operations."""
 
         class Product(SymFields):
@@ -87,7 +87,7 @@ class TestBasicArithmetic:
         s3 = Product(a=3, c=12)
         assert s3.b == 4
 
-    def test_division(self):
+    def test_division(self) -> None:
         """Test division operations."""
 
         class Ratio(SymFields):
@@ -111,7 +111,7 @@ class TestBasicArithmetic:
 class TestComplexExpressions:
     """Test more complex expressions."""
 
-    def test_combined_operations(self):
+    def test_combined_operations(self) -> None:
         """Test expressions with multiple operations."""
 
         class Combined(SymFields):
@@ -128,7 +128,7 @@ class TestComplexExpressions:
         s2 = Combined(d=14, b=3, c=4)
         assert s2.a == 2
 
-    def test_multiple_rules(self):
+    def test_multiple_rules(self) -> None:
         """Test when multiple rules exist."""
 
         class MultiRule(SymFields):
@@ -147,7 +147,7 @@ class TestComplexExpressions:
         assert s2.a == 3
         assert s2.b == 4
 
-    def test_chained_rules(self):
+    def test_chained_rules(self) -> None:
         """Test when rules depend on each other."""
 
         class Chained(SymFields):
@@ -174,7 +174,7 @@ class TestComplexExpressions:
 class TestValidation:
     """Test validation and error cases."""
 
-    def test_validation_error_on_contradiction(self):
+    def test_validation_error_on_contradiction(self) -> None:
         """Test that providing contradictory values raises an error."""
 
         class Sum(SymFields):
@@ -185,7 +185,7 @@ class TestValidation:
         with pytest.raises(ValueError, match="Validation error.*expected c=3.*got c=4"):
             Sum(a=1, b=2, c=4)
 
-    def test_not_enough_arguments(self):
+    def test_not_enough_arguments(self) -> None:
         """Test error when not enough fields are provided."""
 
         class Sum(SymFields):
@@ -196,7 +196,7 @@ class TestValidation:
         with pytest.raises(ValueError, match="Not enough arguments"):
             Sum(a=1)
 
-    def test_all_fields_provided_and_valid(self):
+    def test_all_fields_provided_and_valid(self) -> None:
         """Test that providing all fields works if they're consistent."""
 
         class Sum(SymFields):
@@ -209,7 +209,7 @@ class TestValidation:
         assert s.b == 2
         assert s.c == 3
 
-    def test_multiple_missing_fields_error(self):
+    def test_multiple_missing_fields_error(self) -> None:
         """Test error message lists all unsolvable fields."""
 
         class Complex(SymFields):
@@ -225,7 +225,7 @@ class TestValidation:
 class TestMultipleRulesForSameField:
     """Test cases where a field appears in multiple rules."""
 
-    def test_field_in_multiple_rules_fallback(self):
+    def test_field_in_multiple_rules_fallback(self) -> None:
         """Test that when one rule can't solve a field, it tries others."""
 
         class MultiPath(SymFields):
@@ -245,7 +245,7 @@ class TestMultipleRulesForSameField:
         assert s2.b == 2
         assert s2.d == 3
 
-    def test_solve_via_alternative_rule(self):
+    def test_solve_via_alternative_rule(self) -> None:
         """Test solving a field that appears on the right side of multiple rules."""
 
         class Alternative(SymFields):
@@ -263,7 +263,7 @@ class TestMultipleRulesForSameField:
 class TestDataclassBehavior:
     """Test that SymFields instances behave like dataclasses."""
 
-    def test_repr(self):
+    def test_repr(self) -> None:
         """Test that instances have a nice repr."""
 
         class Sum(SymFields):
@@ -278,7 +278,7 @@ class TestDataclassBehavior:
         assert "b=2" in repr_str
         assert "c=3" in repr_str
 
-    def test_equality(self):
+    def test_equality(self) -> None:
         """Test that instances can be compared for equality."""
 
         class Sum(SymFields):
@@ -293,7 +293,7 @@ class TestDataclassBehavior:
         assert s1 == s2  # Both represent the same values
         assert s1 != s3  # Different values
 
-    def test_field_access(self):
+    def test_field_access(self) -> None:
         """Test that fields can be accessed as attributes."""
 
         class Sum(SymFields):
@@ -310,7 +310,7 @@ class TestDataclassBehavior:
 class TestEdgeCases:
     """Test edge cases and special scenarios."""
 
-    def test_single_field_no_rules(self):
+    def test_single_field_no_rules(self) -> None:
         """Test a class with just regular fields, no rules."""
 
         class Simple(SymFields):
@@ -321,7 +321,7 @@ class TestEdgeCases:
         assert s.a == 1
         assert s.b == 2
 
-    def test_float_precision(self):
+    def test_float_precision(self) -> None:
         """Test that float calculations maintain reasonable precision."""
 
         class Precise(SymFields):
@@ -332,7 +332,7 @@ class TestEdgeCases:
         s = Precise(a=1, b=3)
         assert abs(s.c - 0.333333) < 0.0001
 
-    def test_negative_numbers(self):
+    def test_negative_numbers(self) -> None:
         """Test that negative numbers work correctly."""
 
         class Negative(SymFields):
@@ -343,7 +343,7 @@ class TestEdgeCases:
         s = Negative(a=-5, b=3)
         assert s.c == -2
 
-    def test_zero_handling(self):
+    def test_zero_handling(self) -> None:
         """Test that zero values work correctly."""
 
         class Zero(SymFields):
@@ -354,7 +354,7 @@ class TestEdgeCases:
         s = Zero(a=0, b=5)
         assert s.c == 5
 
-    def test_integer_type_hints(self):
+    def test_integer_type_hints(self) -> None:
         """Test that int type hints work too."""
 
         class IntFields(SymFields):
