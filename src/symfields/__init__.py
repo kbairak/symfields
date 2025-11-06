@@ -7,7 +7,7 @@ from typing import Any
 from sympy import Eq, Expr, Symbol, solve
 from typing_extensions import dataclass_transform
 
-__all__ = ["SymFields", "S"]
+__all__ = ["S", "SymFields"]
 
 
 class _SentinelSymbol:
@@ -99,7 +99,7 @@ class SymFields:
         original_init = cls.__init__
 
         # Define new __init__ as a closure
-        def __init__(self, **kwargs):
+        def __init__(self: Any, **kwargs: Any) -> None:
             all_fields = set(cls.__annotations__)
             known_fields = set(kwargs)
             unknown_fields = all_fields - known_fields

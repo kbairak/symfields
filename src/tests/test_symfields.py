@@ -182,7 +182,7 @@ class TestValidation:
             b: float = S
             c: float = S("a") + S("b")
 
-        with pytest.raises(ValueError, match="Validation error.*expected c=3.*got c=4"):
+        with pytest.raises(ValueError, match=r"Validation error.*expected c=3.*got c=4"):
             Sum(a=1, b=2, c=4)
 
     def test_not_enough_arguments(self) -> None:
