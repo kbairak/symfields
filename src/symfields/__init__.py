@@ -2,9 +2,6 @@
 
 import dataclasses
 import math
-# TODO: Don't need the double import, just `import dataclasses`, adjust the rest of the code
-from dataclasses import dataclass
-from typing import Any
 
 import sympy
 from sympy import Symbol as S
@@ -33,7 +30,7 @@ class SymFields:
     def __init_subclass__(cls):
         """Process class definition to extract and invert symbolic rules."""
         # Extract rules: fields with symbolic expressions as defaults
-        rules = {  # TODO: assign to `cls._symfields_rules` directly
+        cls._symfields_rules = {
             name: value
             for name in cls.__annotations__
             if hasattr(cls, name) and isinstance(value := getattr(cls, name), Expr)
@@ -41,13 +38,13 @@ class SymFields:
 
         # Build mapping: field -> list of ways to calculate it
         # Each way is: (expression, set of required fields)
-        rules_by_target = {}  # TODO: assign to `cls._symfields_rules_by_target` directly
+        cls._symfields_rules_by_target = {}
 
-        for target_field, expr in rules.items():
+        for target_field, expr in cls._symfields_rules.items():
             expr_symbols = {str(s) for s in expr.free_symbols}
 
             # Original rule: target = expr
-            rules_by_target.setdefault(target_field, []).append((expr, expr_symbols))
+            cls._symfields_rules_by_target.setdefault(target_field, []).append((expr, expr_symbols))
 
             # Inverted rules: solve for each symbol in the expression
             for symbol_name in expr_symbols:
@@ -55,17 +52,14 @@ class SymFields:
                 if solutions:
                     inverted_expr = solutions[0]
                     required = (expr_symbols - {symbol_name}) | {target_field}
-                    rules_by_target.setdefault(symbol_name, []).append((inverted_expr, required))
-
-        cls._symfields_rules = rules
-        cls._symfields_rules_by_target = rules_by_target
+                    cls._symfields_rules_by_target.setdefault(symbol_name, []).append((inverted_expr, required))
 
         # Remove symbolic defaults so dataclass doesn't complain
-        for name in rules:
+        for name in cls._symfields_rules:
             delattr(cls, name)
 
-        # Make it a dataclass
-        dataclass(cls)  # QUESTION: do we need `cls = dataclass(cls)`?
+        # Make it a dataclass (modifies cls in-place, no need to reassign)
+        dataclasses.dataclass(cls)
 
         # Capture the dataclass __init__
         original_init = cls.__init__
