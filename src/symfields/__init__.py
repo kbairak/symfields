@@ -64,9 +64,6 @@ class SymFields:
     """
 
     # Class-level attributes added by __init_subclass__
-    _symfields_equations: list[Any]
-    _symfields_lambdas: dict[str, tuple[Callable[..., Any], list[str]]]
-
     def __init_subclass__(cls) -> None:
         """Process class definition to extract symbolic rules and lambdas."""
         equations, lambdas = [], {}
@@ -101,11 +98,7 @@ class SymFields:
                 lambdas[name] = (func, dependency_fields)
             delattr(cls, name)
 
-        # Store equations and lambdas for later use
-        cls._symfields_equations = equations
-        cls._symfields_lambdas = lambdas
-
-        dataclass(cls)
+        dataclass(cls, frozen=True)
         original_init = cls.__init__
 
         def __init__(self: SymFields, **kwargs: Any) -> None:
@@ -115,39 +108,44 @@ class SymFields:
             # Solve sympy equations as a system
             subs = {Symbol(key): value for key, value in kwargs.items()}
             unknowns_list = list(unknown_fields - lambdas.keys())
-            solutions = solve(
-                [eq.subs(subs) for eq in cls._symfields_equations], unknowns_list
-            )
+            solutions_list = solve([eq.subs(subs) for eq in equations], unknowns_list)
 
+            # TODO: extract this to a different function with a descriptive name
             # Handle different solution formats from sympy
-            if isinstance(solutions, list) and solutions:
+            if not solutions_list:
+                solutions_dict = {}
+            elif isinstance(solutions_list, list):
                 # Filter for real solutions if there are multiple
                 real_solutions = []
-                for sol in solutions:
+                for sol in solutions_list:
                     if isinstance(sol, tuple) and all(
-                        not hasattr(v, 'is_real') or v.is_real is not False for v in sol
+                        not hasattr(v, "is_real") or v.is_real is not False for v in sol
                     ):
                         real_solutions.append(sol)
 
                 # Use the first real solution, or last solution if no real ones
-                chosen_solution = real_solutions[0] if real_solutions else solutions[-1]
+                chosen_solution = real_solutions[0] if real_solutions else solutions_list[-1]
 
                 # Convert tuple to dict
                 if isinstance(chosen_solution, tuple):
-                    solutions = dict(zip([Symbol(str(s)) for s in unknowns_list], chosen_solution))
+                    solutions_dict = dict(
+                        zip([Symbol(str(s)) for s in unknowns_list], chosen_solution)
+                    )
                 else:
-                    solutions = chosen_solution
-            elif not solutions:
-                solutions = {}
+                    solutions_dict = chosen_solution
+            elif isinstance(solutions_list, dict):
+                solutions_dict = solutions_list
+            else:
+                solutions_dict = {}
 
             # Extract solved values (skip if still symbolic or complex)
-            for symbol, value in solutions.items():
+            for symbol, value in solutions_dict.items():
                 # Check if value is still symbolic (couldn't be fully solved)
-                if hasattr(value, 'free_symbols') and value.free_symbols:
+                if hasattr(value, "free_symbols") and value.free_symbols:
                     continue
 
                 # Check if value is complex and skip it (prefer real solutions)
-                if hasattr(value, 'is_real') and value.is_real is False:
+                if hasattr(value, "is_real") and value.is_real is False:
                     continue
 
                 try:
@@ -214,7 +212,7 @@ class SymFields:
             validation_errors = []
 
             # Validate sympy equations
-            for eq in cls._symfields_equations:
+            for eq in equations:
                 # Get field name from left-hand side
                 field_name = str(eq.lhs)
 

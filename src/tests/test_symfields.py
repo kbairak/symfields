@@ -411,7 +411,7 @@ class TestAdvancedMathExpressions:
 
         class SquareRoot(SymFields):
             value: float = S
-            square_root: float = sqrt(S("value"))
+            square_root: float = S(sqrt(S("value")))
 
         # Forward: square_root = sqrt(value)
         s1 = SquareRoot(value=16)
@@ -427,7 +427,7 @@ class TestAdvancedMathExpressions:
         class RightTriangle(SymFields):
             a: float = S
             b: float = S
-            c: float = sqrt(S("a") ** 2 + S("b") ** 2)
+            c: float = S(sqrt(S("a") ** 2 + S("b") ** 2))
 
         # Forward: c = sqrt(a^2 + b^2)
         t1 = RightTriangle(a=3, b=4)
@@ -447,8 +447,8 @@ class TestAdvancedMathExpressions:
 
         class TrigCalc(SymFields):
             angle: float = S
-            sine: float = sin(S("angle"))
-            cosine: float = cos(S("angle"))
+            sine: float = S(sin(S("angle")))
+            cosine: float = S(cos(S("angle")))
 
         # Forward: compute sin and cos from angle
         t1 = TrigCalc(angle=0)
@@ -465,8 +465,8 @@ class TestAdvancedMathExpressions:
 
         class ExpLog(SymFields):
             x: float = S
-            exp_x: float = exp(S("x"))
-            log_exp_x: float = log(S("exp_x"))
+            exp_x: float = S(exp(S("x")))
+            log_exp_x: float = S(log(S("exp_x")))
 
         # Forward: exp_x = e^x, log_exp_x = log(exp_x) = x
         e1 = ExpLog(x=2)
@@ -519,7 +519,7 @@ class TestAdvancedMathExpressions:
 
         class TanCalc(SymFields):
             angle: float = S
-            tangent: float = tan(S("angle"))
+            tangent: float = S(tan(S("angle")))
 
         # Forward: tangent = tan(angle)
         t1 = TanCalc(angle=0)
