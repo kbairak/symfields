@@ -3,6 +3,7 @@ name = "symfields"
 version = "0.1.0"
 description = "A library for defining classes with symbolic field relationships that can be automatically inverted"
 readme = "README.md"
+license = { text = "MIT" }
 authors = [
     { name = "Claude", email = "noreply@anthropic.com" }
 ]
