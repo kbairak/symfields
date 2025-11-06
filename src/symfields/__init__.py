@@ -246,7 +246,7 @@ class SymFields:
                 try:
                     is_valid = math.isclose(expected, actual)
                 except (TypeError, ValueError):
-                    is_valid = (expected == actual)
+                    is_valid = expected == actual
 
                 if not is_valid:
                     error_info = [

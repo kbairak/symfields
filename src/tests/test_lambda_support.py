@@ -29,7 +29,7 @@ class TestBasicLambdaFunctionality:
 
         class Square(SymFields):
             side: float = S
-            area: float = S(lambda side: side ** 2)
+            area: float = S(lambda side: side**2)
 
         s = Square(side=5)
         assert s.side == 5
@@ -184,7 +184,7 @@ class TestLambdaWithExternalFunctions:
 
         class Circle(SymFields):
             radius: float = S
-            area: float = S(lambda radius: math.pi * radius ** 2)
+            area: float = S(lambda radius: math.pi * radius**2)
 
         c = Circle(radius=5)
         assert math.isclose(c.area, math.pi * 25)
@@ -193,7 +193,7 @@ class TestLambdaWithExternalFunctions:
         """Test that regular functions work, not just lambdas."""
 
         def calculate_bmi(weight: float, height: float) -> float:
-            return weight / (height ** 2)
+            return weight / (height**2)
 
         class Person(SymFields):
             weight: float = S
@@ -201,7 +201,7 @@ class TestLambdaWithExternalFunctions:
             bmi: float = S(calculate_bmi)
 
         p = Person(weight=70, height=1.75)
-        expected_bmi = 70 / (1.75 ** 2)
+        expected_bmi = 70 / (1.75**2)
         assert math.isclose(p.bmi, expected_bmi)
 
 
