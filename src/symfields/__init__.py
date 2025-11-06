@@ -126,17 +126,50 @@ class SymFields:
 
             # Check if we solved everything
             if unknown_fields:
-                fields_str = ", ".join(f"'{f}'" for f in sorted(unknown_fields))
-                raise ValueError(f"Not enough arguments to calculate fields {fields_str}")
+                # Build helpful error message
+                provided = ", ".join(f"'{f}'" for f in sorted(known_fields))
+                missing = ", ".join(f"'{f}'" for f in sorted(unknown_fields))
+
+                # Show what's needed for each missing field
+                suggestions = []
+                for field in sorted(unknown_fields):
+                    ways = cls._symfields_rules_by_target.get(field, [])
+                    if ways:
+                        for _, required_fields in ways:
+                            still_needed = required_fields - known_fields
+                            if still_needed:
+                                need_str = ", ".join(f"'{f}'" for f in sorted(still_needed))
+                                suggestions.append(
+                                    f"  - To calculate '{field}', also provide: {need_str}"
+                                )
+                                break  # Just show first option per field
+
+                error_lines = [
+                    "Cannot calculate all fields with the provided arguments.",
+                    f"Provided: {provided}",
+                    f"Missing: {missing}",
+                ]
+                if suggestions:
+                    error_lines.append("Suggestions:")
+                    error_lines.extend(suggestions)
+
+                raise ValueError("\n".join(error_lines))
 
             # Validate: re-evaluate original rules
             for target_field, expr in cls._symfields_rules.items():
                 expected = float(expr.subs({str(s): kwargs[str(s)] for s in expr.free_symbols}))
                 if not math.isclose(expected, kwargs[target_field]):
-                    raise ValueError(
-                        f"Validation error, expected {target_field}={expected}, "
-                        f"got {target_field}={kwargs[target_field]}"
-                    )
+                    # Build helpful validation error
+                    expr_str = str(expr)
+                    actual = kwargs[target_field]
+                    error_lines = [
+                        f"Validation failed for field '{target_field}'.",
+                        f"Rule: {target_field} = {expr_str}",
+                        f"Expected: {expected}",
+                        f"Got: {actual}",
+                        f"Difference: {abs(expected - actual)}",
+                    ]
+                    raise ValueError("\n".join(error_lines))
 
             # Call dataclass __init__
             original_init(self, **kwargs)

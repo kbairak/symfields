@@ -185,7 +185,7 @@ class TestValidation:
             b: float = S
             c: float = S("a") + S("b")
 
-        with pytest.raises(ValueError, match=r"Validation error.*expected c=3.*got c=4"):
+        with pytest.raises(ValueError, match=r"Validation failed for field 'c'"):
             Sum(a=1, b=2, c=4)
 
     def test_not_enough_arguments(self) -> None:
@@ -196,7 +196,7 @@ class TestValidation:
             b: float = S
             c: float = S("a") + S("b")
 
-        with pytest.raises(ValueError, match="Not enough arguments"):
+        with pytest.raises(ValueError, match="Cannot calculate all fields"):
             Sum(a=1)
 
     def test_all_fields_provided_and_valid(self) -> None:
@@ -220,8 +220,8 @@ class TestValidation:
             b: float = S
             c: float = S("a") + S("b")
 
-        # With no arguments, both b and c cannot be calculated
-        with pytest.raises(ValueError, match="Not enough arguments"):
+        # With no arguments, a, b, and c cannot be calculated
+        with pytest.raises(ValueError, match="Cannot calculate all fields"):
             Complex()
 
 
