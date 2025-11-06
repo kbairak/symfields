@@ -1,6 +1,9 @@
 """Test suite for SymFields library."""
 
+import math
+
 import pytest
+from sympy import cos, exp, log, pi, sin, sqrt, tan
 
 from symfields import S, SymFields
 
@@ -365,3 +368,168 @@ class TestEdgeCases:
         s = IntFields(a=1, b=2)
         assert s.c == 3
         assert isinstance(s.c, (int, float))
+
+
+class TestAdvancedMathExpressions:
+    """Test advanced sympy mathematical expressions."""
+
+    def test_power_operations(self) -> None:
+        """Test expressions with exponents and powers."""
+
+        class PowerCalc(SymFields):
+            base: float = S
+            exponent: float = S
+            result: float = S("base") ** S("exponent")
+
+        # Forward: result = base^exponent
+        p1 = PowerCalc(base=2, exponent=3)
+        assert p1.result == 8
+
+        # Backward: base = result^(1/exponent)
+        p2 = PowerCalc(result=8, exponent=3)
+        assert math.isclose(p2.base, 2)
+
+        # Backward: exponent = log(result) / log(base)
+        p3 = PowerCalc(base=2, result=8)
+        assert math.isclose(p3.exponent, 3)
+
+    def test_square_root(self) -> None:
+        """Test expressions with square roots."""
+
+        class SquareRoot(SymFields):
+            value: float = S
+            square_root: float = sqrt(S("value"))
+
+        # Forward: square_root = sqrt(value)
+        s1 = SquareRoot(value=16)
+        assert s1.square_root == 4
+
+        # Backward: value = square_root^2
+        s2 = SquareRoot(square_root=4)
+        assert s2.value == 16
+
+    def test_pythagorean_theorem(self) -> None:
+        """Test Pythagorean theorem: c^2 = a^2 + b^2."""
+
+        class RightTriangle(SymFields):
+            a: float = S
+            b: float = S
+            c: float = sqrt(S("a") ** 2 + S("b") ** 2)
+
+        # Forward: c = sqrt(a^2 + b^2)
+        t1 = RightTriangle(a=3, b=4)
+        assert t1.c == 5
+
+        # Backward: a = sqrt(c^2 - b^2)
+        # Note: sympy may return negative solution, so we check absolute value
+        t2 = RightTriangle(c=5, b=4)
+        assert math.isclose(abs(t2.a), 3)
+
+        # Backward: b = sqrt(c^2 - a^2)
+        t3 = RightTriangle(a=3, c=5)
+        assert math.isclose(abs(t3.b), 4)
+
+    def test_trigonometric_functions(self) -> None:
+        """Test trigonometric functions."""
+
+        class TrigCalc(SymFields):
+            angle: float = S
+            sine: float = sin(S("angle"))
+            cosine: float = cos(S("angle"))
+
+        # Forward: compute sin and cos from angle
+        t1 = TrigCalc(angle=0)
+        assert math.isclose(t1.sine, 0)
+        assert math.isclose(t1.cosine, 1)
+
+        # Test pi/2 radians (90 degrees)
+        t2 = TrigCalc(angle=float(pi / 2))
+        assert math.isclose(t2.sine, 1, abs_tol=1e-10)
+        assert math.isclose(t2.cosine, 0, abs_tol=1e-10)
+
+    def test_exponential_and_logarithm(self) -> None:
+        """Test exponential and logarithmic functions."""
+
+        class ExpLog(SymFields):
+            x: float = S
+            exp_x: float = exp(S("x"))
+            log_exp_x: float = log(S("exp_x"))
+
+        # Forward: exp_x = e^x, log_exp_x = log(exp_x) = x
+        e1 = ExpLog(x=2)
+        assert math.isclose(e1.exp_x, math.e**2)
+        assert math.isclose(e1.log_exp_x, 2)
+
+        # Backward: x = log(exp_x)
+        e2 = ExpLog(exp_x=math.e**2)
+        assert math.isclose(e2.x, 2)
+        assert math.isclose(e2.log_exp_x, 2)
+
+    def test_compound_interest(self) -> None:
+        """Test compound interest formula: A = P(1 + r)^t."""
+
+        class CompoundInterest(SymFields):
+            principal: float = S
+            rate: float = S
+            time: float = S
+            amount: float = S("principal") * (1 + S("rate")) ** S("time")
+
+        # Forward: Calculate final amount
+        c1 = CompoundInterest(principal=1000, rate=0.05, time=10)
+        assert math.isclose(c1.amount, 1000 * (1.05**10))
+
+        # Backward: Calculate principal needed
+        c2 = CompoundInterest(amount=1628.89, rate=0.05, time=10)
+        assert math.isclose(c2.principal, 1000, rel_tol=0.01)
+
+    def test_circle_with_pi(self) -> None:
+        """Test circle formulas using pi."""
+
+        class Circle(SymFields):
+            radius: float = S
+            circumference: float = 2 * pi * S("radius")
+            area: float = pi * S("radius") ** 2
+
+        # Forward: Calculate circumference and area
+        c1 = Circle(radius=5)
+        assert math.isclose(c1.circumference, 2 * math.pi * 5)
+        assert math.isclose(c1.area, math.pi * 25)
+
+        # Backward: Calculate radius from area
+        # Note: sympy may return negative solution, so we check absolute value
+        c2 = Circle(area=math.pi * 25)
+        assert math.isclose(abs(c2.radius), 5)
+        assert math.isclose(abs(c2.circumference), 2 * math.pi * 5)
+
+    def test_tangent_function(self) -> None:
+        """Test tangent function: tan = sin/cos."""
+
+        class TanCalc(SymFields):
+            angle: float = S
+            tangent: float = tan(S("angle"))
+
+        # Forward: tangent = tan(angle)
+        t1 = TanCalc(angle=0)
+        assert math.isclose(t1.tangent, 0)
+
+        # Test pi/4 radians (45 degrees) where tan = 1
+        t2 = TanCalc(angle=float(pi / 4))
+        assert math.isclose(t2.tangent, 1)
+
+    def test_combined_advanced_operations(self) -> None:
+        """Test combination of multiple advanced operations."""
+
+        class Physics(SymFields):
+            velocity: float = S
+            time: float = S
+            # Distance with exponential decay: d = v * t * e^(-t)
+            distance: float = S("velocity") * S("time") * exp(-S("time"))
+
+        # Forward calculation
+        p1 = Physics(velocity=10, time=1)
+        expected = 10 * 1 * math.e ** (-1)
+        assert math.isclose(p1.distance, expected)
+
+        # Backward: solve for velocity given distance and time
+        p2 = Physics(distance=expected, time=1)
+        assert math.isclose(p2.velocity, 10)
