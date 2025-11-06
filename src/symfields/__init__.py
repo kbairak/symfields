@@ -30,9 +30,9 @@ class SymFields:
         """Process class definition to extract and invert symbolic rules."""
         # Extract rules: fields with symbolic expressions as defaults
         cls._symfields_rules = {
-            name: value
+            name: getattr(cls, name)
             for name in cls.__annotations__
-            if hasattr(cls, name) and isinstance(value := getattr(cls, name), Expr)
+            if hasattr(cls, name) and isinstance(getattr(cls, name), Expr)
         }
 
         # Build mapping: field -> list of ways to calculate it
