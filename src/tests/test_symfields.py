@@ -12,8 +12,8 @@ class TestBasicArithmetic:
         """Test calculating c from a and b."""
 
         class Sum(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") + S("b")
 
         s = Sum(a=1, b=2)
@@ -25,8 +25,8 @@ class TestBasicArithmetic:
         """Test calculating b from a and c."""
 
         class Sum(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") + S("b")
 
         s = Sum(a=1, c=3)
@@ -38,8 +38,8 @@ class TestBasicArithmetic:
         """Test calculating a from b and c."""
 
         class Sum(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") + S("b")
 
         s = Sum(b=2, c=3)
@@ -51,8 +51,8 @@ class TestBasicArithmetic:
         """Test subtraction operations."""
 
         class Diff(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") - S("b")
 
         # Forward: c = a - b
@@ -71,8 +71,8 @@ class TestBasicArithmetic:
         """Test multiplication operations."""
 
         class Product(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") * S("b")
 
         # Forward: c = a * b
@@ -91,8 +91,8 @@ class TestBasicArithmetic:
         """Test division operations."""
 
         class Ratio(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") / S("b")
 
         # Forward: c = a / b
@@ -115,9 +115,9 @@ class TestComplexExpressions:
         """Test expressions with multiple operations."""
 
         class Combined(SymFields):
-            a: float
-            b: float
-            c: float
+            a: float = S
+            b: float = S
+            c: float = S
             d: float = S("a") + S("b") * S("c")
 
         # Forward: d = a + b * c
@@ -132,8 +132,8 @@ class TestComplexExpressions:
         """Test when multiple rules exist."""
 
         class MultiRule(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") + S("b")
             d: float = S("a") * 2
 
@@ -151,7 +151,7 @@ class TestComplexExpressions:
         """Test when rules depend on each other."""
 
         class Chained(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") * 2
             c: float = S("b") + 3
 
@@ -178,8 +178,8 @@ class TestValidation:
         """Test that providing contradictory values raises an error."""
 
         class Sum(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") + S("b")
 
         with pytest.raises(ValueError, match="Validation error.*expected c=3.*got c=4"):
@@ -189,8 +189,8 @@ class TestValidation:
         """Test error when not enough fields are provided."""
 
         class Sum(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") + S("b")
 
         with pytest.raises(ValueError, match="Not enough arguments"):
@@ -200,8 +200,8 @@ class TestValidation:
         """Test that providing all fields works if they're consistent."""
 
         class Sum(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") + S("b")
 
         s = Sum(a=1, b=2, c=3)
@@ -213,8 +213,8 @@ class TestValidation:
         """Test error message lists all unsolvable fields."""
 
         class Complex(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") + S("b")
 
         # With no arguments, both b and c cannot be calculated
@@ -229,9 +229,9 @@ class TestMultipleRulesForSameField:
         """Test that when one rule can't solve a field, it tries others."""
 
         class MultiPath(SymFields):
-            a: float
-            b: float
-            c: float
+            a: float = S
+            b: float = S
+            c: float = S
             d: float = S("a") + S("b")  # d depends on a and b
             e: float = S("c") + S("b")  # e depends on c and b
 
@@ -249,9 +249,9 @@ class TestMultipleRulesForSameField:
         """Test solving a field that appears on the right side of multiple rules."""
 
         class Alternative(SymFields):
-            a: float
-            b: float
-            c: float
+            a: float = S
+            b: float = S
+            c: float = S
             d: float = S("a") + S("b")
             e: float = S("c") + S("b")
 
@@ -267,8 +267,8 @@ class TestDataclassBehavior:
         """Test that instances have a nice repr."""
 
         class Sum(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") + S("b")
 
         s = Sum(a=1, b=2)
@@ -282,8 +282,8 @@ class TestDataclassBehavior:
         """Test that instances can be compared for equality."""
 
         class Sum(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") + S("b")
 
         s1 = Sum(a=1, b=2)
@@ -297,8 +297,8 @@ class TestDataclassBehavior:
         """Test that fields can be accessed as attributes."""
 
         class Sum(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") + S("b")
 
         s = Sum(a=1, b=2)
@@ -314,8 +314,8 @@ class TestEdgeCases:
         """Test a class with just regular fields, no rules."""
 
         class Simple(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
 
         s = Simple(a=1, b=2)
         assert s.a == 1
@@ -325,8 +325,8 @@ class TestEdgeCases:
         """Test that float calculations maintain reasonable precision."""
 
         class Precise(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") / S("b")
 
         s = Precise(a=1, b=3)
@@ -336,8 +336,8 @@ class TestEdgeCases:
         """Test that negative numbers work correctly."""
 
         class Negative(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") + S("b")
 
         s = Negative(a=-5, b=3)
@@ -347,8 +347,8 @@ class TestEdgeCases:
         """Test that zero values work correctly."""
 
         class Zero(SymFields):
-            a: float
-            b: float
+            a: float = S
+            b: float = S
             c: float = S("a") + S("b")
 
         s = Zero(a=0, b=5)
@@ -358,8 +358,8 @@ class TestEdgeCases:
         """Test that int type hints work too."""
 
         class IntFields(SymFields):
-            a: int
-            b: int
+            a: int = S
+            b: int = S
             c: int = S("a") + S("b")
 
         s = IntFields(a=1, b=2)
