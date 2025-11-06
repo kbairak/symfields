@@ -54,6 +54,7 @@ s = Sum(b=2.0, c=3.0)
 - **Type checker friendly**: Optional `= S` pattern helps mypy understand dynamic keyword arguments
 - **IDE support**: Field annotations enable autocomplete in your IDE
 - **Validation**: Automatically validates that all provided values satisfy the rules
+- **Flexible rules**: Use sympy expressions (invertible) or lambdas/callables (forward-only) for any type
 
 ## Examples
 
@@ -127,6 +128,36 @@ Chained(a=5.0)    # Chained(a=5.0, b=10.0, c=13.0)
 Chained(c=13.0)   # Chained(a=5.0, b=10.0, c=13.0)
 ```
 
+**Lambda/Callable Support**
+
+For non-mathematical or forward-only calculations, you can use lambdas or regular functions:
+
+```python
+# String manipulation
+class Person(SymFields):
+    first_name: str = S
+    last_name: str = S
+    full_name: str = lambda first_name, last_name: f"{first_name} {last_name}"
+
+Person(first_name="John", last_name="Doe")
+# Person(first_name='John', last_name='Doe', full_name='John Doe')
+
+# Mixed sympy (invertible) and lambda (forward-only)
+class Rectangle(SymFields):
+    width: float = S
+    height: float = S
+    area: float = S('width') * S('height')  # Can solve backwards
+    label: str = lambda width, height: f"{width}x{height}"  # Forward only
+
+Rectangle(width=5, height=4)
+# Rectangle(width=5, height=4, area=20.0, label='5x4')
+
+Rectangle(area=20, height=4)  # Uses sympy to solve for width
+# Rectangle(width=5.0, height=4, area=20.0, label='5.0x4')
+```
+
+**Note:** Lambdas are forward-only and cannot be inverted. You cannot solve for `first_name` given `full_name`.
+
 **Complex Financial Calculations**
 ```python
 from decimal import Decimal
@@ -196,7 +227,7 @@ Planned improvements and features:
 - [ ] **Add README badges** - CI status, PyPI version, Python versions, license
 - [x] **Better error messages** - More helpful messages when rules can't be solved or constraints are violated
 - [x] **Test advanced sympy expressions** - Powers, sqrt, trig functions, logarithms
-- [ ] **Lambda support** - Allow lambdas as an alternative to sympy expressions (e.g., `area: float = lambda width, height: width * height`). Dependencies would be inferred from lambda parameter names. Note: lambdas wouldn't be invertible, only one-way calculations.
+- [x] **Lambda support** - Allow lambdas as an alternative to sympy expressions (e.g., `area: float = lambda width, height: width * height`). Dependencies would be inferred from lambda parameter names. Note: lambdas wouldn't be invertible, only one-way calculations.
 
 ## License
 
