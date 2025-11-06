@@ -170,7 +170,7 @@ This project uses `uv` for dependency management and includes a Makefile for com
 make test
 ```
 
-**Run linting (ruff + ty):**
+**Run linting (ruff + mypy):**
 ```bash
 make lint
 ```
@@ -182,7 +182,7 @@ make ruff
 
 **Run type checking only:**
 ```bash
-make ty
+make mypy
 ```
 
 ## TODO
