@@ -155,21 +155,28 @@ class SymFields:
 
                 raise ValueError("\n".join(error_lines))
 
-            # Validate: re-evaluate original rules
+            # Validate: re-evaluate original rules and collect all errors
+            validation_errors = []
             for target_field, expr in cls._symfields_rules.items():
                 expected = float(expr.subs({str(s): kwargs[str(s)] for s in expr.free_symbols}))
                 if not math.isclose(expected, kwargs[target_field]):
-                    # Build helpful validation error
                     expr_str = str(expr)
                     actual = kwargs[target_field]
-                    error_lines = [
-                        f"Validation failed for field '{target_field}'.",
-                        f"Rule: {target_field} = {expr_str}",
-                        f"Expected: {expected}",
-                        f"Got: {actual}",
-                        f"Difference: {abs(expected - actual)}",
-                    ]
-                    raise ValueError("\n".join(error_lines))
+                    validation_errors.append(
+                        f"  Field '{target_field}':\n"
+                        f"    Rule: {target_field} = {expr_str}\n"
+                        f"    Expected: {expected}\n"
+                        f"    Got: {actual}\n"
+                        f"    Difference: {abs(expected - actual)}"
+                    )
+
+            if validation_errors:
+                error_message = (
+                    f"Validation failed for {len(validation_errors)} "
+                    f"field{'s' if len(validation_errors) > 1 else ''}.\n"
+                    + "\n".join(validation_errors)
+                )
+                raise ValueError(error_message)
 
             # Call dataclass __init__
             original_init(self, **kwargs)

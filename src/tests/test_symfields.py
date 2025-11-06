@@ -185,7 +185,7 @@ class TestValidation:
             b: float = S
             c: float = S("a") + S("b")
 
-        with pytest.raises(ValueError, match=r"Validation failed for field 'c'"):
+        with pytest.raises(ValueError, match=r"Validation failed for 1 field"):
             Sum(a=1, b=2, c=4)
 
     def test_not_enough_arguments(self) -> None:
@@ -223,6 +223,19 @@ class TestValidation:
         # With no arguments, a, b, and c cannot be calculated
         with pytest.raises(ValueError, match="Cannot calculate all fields"):
             Complex()
+
+    def test_multiple_validation_errors(self) -> None:
+        """Test that all validation errors are collected and displayed."""
+
+        class Rectangle(SymFields):
+            width: float = S
+            height: float = S
+            perimeter: float = 2 * (S("width") + S("height"))
+            area: float = S("width") * S("height")
+
+        # Provide contradictory values for both perimeter and area
+        with pytest.raises(ValueError, match=r"Validation failed for 2 fields"):
+            Rectangle(width=5, height=4, perimeter=20, area=25)
 
 
 class TestMultipleRulesForSameField:
