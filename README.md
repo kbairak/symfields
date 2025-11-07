@@ -224,6 +224,7 @@ make mypy
 
 Planned improvements and features:
 
+- [ ] **Add `.update()` method** - Allow updating fields after instance creation with constraint propagation (treat non-changed fields as fixed, propagate through derived fields only)
 - [ ] **Publish to PyPI** - Make the package available via `pip install symfields`
 - [ ] **Add README badges** - CI status, PyPI version, Python versions, license
 
