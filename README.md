@@ -176,24 +176,25 @@ class BuyStatement(SymFields):
 
 ## How It Works
 
-SymFields uses **sympy** for symbolic mathematics to automatically invert your rules.
+SymFields uses **[sympy](https://www.sympy.org/)** to solve systems of equations automatically.
 
 **At class definition time** (in `__init_subclass__`):
-1. Extracts symbolic expressions from field defaults
-2. For each rule like `c = a + b`, uses sympy to solve for every variable:
-   - `c = a + b` (original)
-   - `a = c - b` (inverted)
-   - `b = c - a` (inverted)
-3. Stores all these solving paths for later use
+1. Extracts symbolic expressions and lambdas from field defaults
+2. Validates lambda signatures (parameters must match field names)
+3. Stores the equations for solving at instance creation
 
 **At instance creation time** (in `__init__`):
-1. Starts with the fields you provide
-2. Iteratively tries to solve for unknown fields using the precomputed rules
-3. Picks the first rule where all required inputs are available
-4. Continues until all fields are computed or no progress can be made
-5. Validates that all provided values satisfy the original rules
+1. Takes the fields you provide as known values
+2. **Solves all sympy equations as a system** using `sympy.solve()` with all unknowns at once
+   - Example: Given `top_speed` and `distance`, solves for both `acceleration` and `time` simultaneously
+   - Filters for real-valued solutions when multiple solutions exist (e.g., complex roots)
+3. **Evaluates lambdas iteratively** (forward-only, cannot be inverted)
+   - Calculates lambda fields once their dependencies are known
+4. **Validates all rules** to ensure consistency
+   - Re-evaluates all equations and lambdas with the final values
+   - Reports detailed errors if any constraints are violated
 
-This preprocessing approach makes the library efficient - equations are only solved once per class, not on every instance creation.
+This approach handles both simple cases (single equations) and complex cases (systems of equations) with the same straightforward logic.
 
 ## Development
 

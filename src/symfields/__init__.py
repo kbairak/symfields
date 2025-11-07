@@ -41,6 +41,56 @@ class _SentinelSymbol:
 S: Any = _SentinelSymbol()
 
 
+def _extract_real_solution(
+    solutions: Any, unknowns_list: list[str]
+) -> dict[Symbol, Any]:
+    """Extract a real-valued solution from sympy's solve() result.
+
+    Sympy's solve() can return different formats depending on the problem:
+    - Empty list: no solution found
+    - List of tuples: multiple solutions (e.g., [(2,), (-1-I,), (-1+I,)])
+    - Dict: single unique solution {symbol: value}
+    - Other formats in edge cases
+
+    This function normalizes the output to a dict and prefers real solutions
+    when multiple solutions exist (e.g., filters out complex roots).
+
+    Args:
+        solutions: Raw output from sympy.solve()
+        unknowns_list: List of unknown field names being solved for
+
+    Returns:
+        Dictionary mapping Symbol objects to their solved values
+    """
+    if not solutions:
+        return {}
+
+    if isinstance(solutions, dict):
+        return solutions
+
+    if isinstance(solutions, list):
+        # Filter for real solutions
+        real_solutions = []
+        for sol in solutions:
+            if isinstance(sol, tuple) and all(
+                not hasattr(v, "is_real") or v.is_real is not False for v in sol
+            ):
+                real_solutions.append(sol)
+
+        # Use the first real solution, or last solution if no real ones
+        chosen_solution = real_solutions[0] if real_solutions else solutions[-1]
+
+        # Convert tuple to dict
+        if isinstance(chosen_solution, tuple):
+            return dict(zip([Symbol(str(s)) for s in unknowns_list], chosen_solution))
+        if isinstance(chosen_solution, dict):
+            return chosen_solution
+        # Shouldn't reach here, but return empty dict as fallback
+        return {}
+
+    return {}
+
+
 @dataclass_transform(kw_only_default=True)
 class SymFields:
     """Base class for defining classes with symbolic field relationships.
@@ -110,33 +160,8 @@ class SymFields:
             unknowns_list = list(unknown_fields - lambdas.keys())
             solutions_list = solve([eq.subs(subs) for eq in equations], unknowns_list)
 
-            # TODO: extract this to a different function with a descriptive name
-            # Handle different solution formats from sympy
-            if not solutions_list:
-                solutions_dict = {}
-            elif isinstance(solutions_list, list):
-                # Filter for real solutions if there are multiple
-                real_solutions = []
-                for sol in solutions_list:
-                    if isinstance(sol, tuple) and all(
-                        not hasattr(v, "is_real") or v.is_real is not False for v in sol
-                    ):
-                        real_solutions.append(sol)
-
-                # Use the first real solution, or last solution if no real ones
-                chosen_solution = real_solutions[0] if real_solutions else solutions_list[-1]
-
-                # Convert tuple to dict
-                if isinstance(chosen_solution, tuple):
-                    solutions_dict = dict(
-                        zip([Symbol(str(s)) for s in unknowns_list], chosen_solution)
-                    )
-                else:
-                    solutions_dict = chosen_solution
-            elif isinstance(solutions_list, dict):
-                solutions_dict = solutions_list
-            else:
-                solutions_dict = {}
+            # Extract real-valued solution from sympy's output
+            solutions_dict = _extract_real_solution(solutions_list, unknowns_list)
 
             # Extract solved values (skip if still symbolic or complex)
             for symbol, value in solutions_dict.items():
