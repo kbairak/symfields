@@ -41,9 +41,7 @@ class _SentinelSymbol:
 S: Any = _SentinelSymbol()
 
 
-def _extract_real_solution(
-    solutions: Any, unknowns_list: list[str]
-) -> dict[Symbol, Any]:
+def _extract_real_solution(solutions: Any, unknowns_list: list[str]) -> dict[Symbol, Any]:
     """Extract a real-valued solution from sympy's solve() result.
 
     Sympy's solve() can return different formats depending on the problem:
