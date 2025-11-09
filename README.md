@@ -55,6 +55,7 @@ s = Sum(b=2.0, c=3.0)
 - **IDE support**: Field annotations enable autocomplete in your IDE
 - **Validation**: Automatically validates that all provided values satisfy the rules
 - **Flexible rules**: Use sympy expressions (invertible) or lambdas/callables (forward-only) for any type
+- **Precision control**: Use `Annotated` types with custom cast functions to control decimal precision and rounding
 
 ## Examples
 
@@ -130,7 +131,7 @@ Chained(c=13.0)   # Chained(a=5.0, b=10.0, c=13.0)
 
 **Lambda/Callable Support**
 
-For non-mathematical or forward-only calculations, you can use lambdas or regular functions:
+For non-mathematical or forward-only calculations, you can use lambdas or regular functions. Lambdas can be used both for calculated fields and for default values:
 
 ```python
 # String manipulation
@@ -154,9 +155,62 @@ Rectangle(width=5, height=4)
 
 Rectangle(area=20, height=4)  # Uses sympy to solve for width
 # Rectangle(width=5.0, height=4, area=20.0, label='5.0x4')
+
+# Lambdas for default values
+from datetime import datetime
+
+class Document(SymFields):
+    title: str = S
+    created_at: datetime = S(lambda: datetime.now())  # Default value
 ```
 
 **Note:** Wrap lambdas/callables with `S()` for type safety. Lambdas are forward-only and cannot be inverted. You cannot solve for `first_name` given `full_name`.
+
+**Precision Control with Annotated**
+
+Control decimal precision and rounding behavior using Python's `Annotated` type with custom cast functions:
+
+```python
+from decimal import Decimal, ROUND_HALF_UP
+from typing import Annotated
+
+def cast_2_places(value):
+    """Round to 2 decimal places."""
+    return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+class Price(SymFields):
+    subtotal: Decimal = S
+    tax_rate: Decimal = S
+    # Total will always have exactly 2 decimal places
+    total: Annotated[Decimal, cast_2_places] = S('subtotal') * (1 + S('tax_rate'))
+
+p = Price(subtotal=Decimal("10.00"), tax_rate=Decimal("0.23"))
+# Price(subtotal=Decimal('10.00'), tax_rate=Decimal('0.23'), total=Decimal('12.30'))
+
+# Works with backward solving too
+p2 = Price(total=Decimal("12.30"), tax_rate=Decimal("0.23"))
+# Price(subtotal=Decimal('10.00'), tax_rate=Decimal('0.23'), total=Decimal('12.30'))
+```
+
+You can use different rounding modes and precisions for different fields:
+
+```python
+from decimal import ROUND_DOWN, ROUND_UP
+
+def cast_2_down(value):
+    return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+
+def cast_4_up(value):
+    return Decimal(str(value)).quantize(Decimal("0.0001"), rounding=ROUND_UP)
+
+class Invoice(SymFields):
+    amount: Decimal = S
+    tax: Annotated[Decimal, cast_2_down] = S('amount') * Decimal("0.23")
+    total: Annotated[Decimal, cast_2_down] = S('amount') + S('tax')
+    precise: Annotated[Decimal, cast_4_up] = S('total') * Decimal("1.001")
+```
+
+**Note:** The cast function must accept exactly one parameter (the value to cast). It's applied both when solving fields and during validation.
 
 **Complex Financial Calculations**
 ```python
@@ -181,17 +235,20 @@ SymFields uses **[sympy](https://www.sympy.org/)** to solve systems of equations
 **At class definition time** (in `__init_subclass__`):
 1. Extracts symbolic expressions and lambdas from field defaults
 2. Validates lambda signatures (parameters must match field names)
-3. Stores the equations for solving at instance creation
+3. Validates `Annotated` cast functions (must have exactly one parameter)
+4. Stores the equations for solving at instance creation
 
 **At instance creation time** (in `__init__`):
 1. Takes the fields you provide as known values
 2. **Solves all sympy equations as a system** using `sympy.solve()` with all unknowns at once
    - Example: Given `top_speed` and `distance`, solves for both `acceleration` and `time` simultaneously
    - Filters for real-valued solutions when multiple solutions exist (e.g., complex roots)
+   - Applies `Annotated` cast functions to solved values for precision control
 3. **Evaluates lambdas iteratively** (forward-only, cannot be inverted)
    - Calculates lambda fields once their dependencies are known
 4. **Validates all rules** to ensure consistency
    - Re-evaluates all equations and lambdas with the final values
+   - Applies cast functions during validation to ensure consistency
    - Reports detailed errors if any constraints are violated
 
 This approach handles both simple cases (single equations) and complex cases (systems of equations) with the same straightforward logic.
