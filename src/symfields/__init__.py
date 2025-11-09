@@ -198,6 +198,88 @@ class SymFields:
         dataclass(cls, frozen=False)
         original_init = cls.__init__
 
+        def _validate_fields(values: dict[str, Any]) -> None:
+            """Validate that all field values satisfy the defined rules.
+
+            Args:
+                values: Dictionary mapping field names to their values
+
+            Raises:
+                ValueError: If any validation fails
+            """
+            validation_errors = []
+
+            # Validate sympy equations
+            for eq in equations:
+                field_name = str(eq.lhs)
+                eq_symbols = eq.free_symbols
+                subs_dict = {Symbol(k): v for k, v in values.items() if Symbol(k) in eq_symbols}
+
+                lhs_value = eq.lhs.subs(subs_dict)
+                rhs_value = eq.rhs.subs(subs_dict)
+
+                # Apply cast function to rhs_value if field has Annotated type
+                annotation = cls.__annotations__[field_name]
+                if get_origin(annotation) is Annotated:
+                    _base_type, cast_func = get_args(annotation)
+                    rhs_value = cast_func(rhs_value)
+
+                # Convert to floats for comparison
+                try:
+                    lhs_float = float(lhs_value)
+                    rhs_float = float(rhs_value)
+                    is_valid = math.isclose(lhs_float, rhs_float)
+                except (TypeError, ValueError):
+                    is_valid = lhs_value == rhs_value
+                    lhs_float, rhs_float = lhs_value, rhs_value
+
+                if not is_valid:
+                    error_info = [
+                        f"  Field '{field_name}':",
+                        f"    Rule: {field_name} = {eq.rhs}",
+                        f"    Expected: {rhs_float}",
+                        f"    Got: {lhs_float}",
+                    ]
+                    try:
+                        diff = abs(lhs_float - rhs_float)
+                        error_info.append(f"    Difference: {diff}")
+                    except (TypeError, ValueError):
+                        pass
+                    validation_errors.append("\n".join(error_info))
+
+            # Validate lambdas
+            for field_name, (func, dependency_fields) in lambdas.items():
+                expected = func(**{param: values[param] for param in dependency_fields})
+                actual = values[field_name]
+
+                try:
+                    is_valid = math.isclose(expected, actual)
+                except (TypeError, ValueError):
+                    is_valid = expected == actual
+
+                if not is_valid:
+                    params_str = ", ".join(dependency_fields)
+                    error_info = [
+                        f"  Field '{field_name}':",
+                        f"    Rule: {field_name} = <callable({params_str})>",
+                        f"    Expected: {expected}",
+                        f"    Got: {actual}",
+                    ]
+                    try:
+                        diff = abs(expected - actual)
+                        error_info.append(f"    Difference: {diff}")
+                    except (TypeError, ValueError):
+                        pass
+                    validation_errors.append("\n".join(error_info))
+
+            if validation_errors:
+                field_word = "field" if len(validation_errors) == 1 else "fields"
+                error_message = (
+                    f"Validation failed for {len(validation_errors)} {field_word}.\n"
+                    + "\n".join(validation_errors)
+                )
+                raise ValueError(error_message)
+
         def __init__(self: SymFields, **kwargs: Any) -> None:
             known_fields = set(kwargs)
             unknown_fields = set(cls.__annotations__) - known_fields
@@ -290,92 +372,7 @@ class SymFields:
                 raise ValueError("\n".join(error_lines))
 
             # Validate all equations and lambdas
-            validation_errors = []
-
-            # Validate sympy equations
-            for eq in equations:
-                # Get field name from left-hand side
-                field_name = str(eq.lhs)
-
-                # Get all symbols in this equation
-                eq_symbols = eq.free_symbols
-
-                # Only substitute values for symbols that are in this equation
-                subs_dict = {Symbol(k): v for k, v in kwargs.items() if Symbol(k) in eq_symbols}
-
-                # Substitute and evaluate
-                lhs_value = eq.lhs.subs(subs_dict)
-                rhs_value = eq.rhs.subs(subs_dict)
-
-                # Apply cast function to rhs_value if field has Annotated type
-                annotation = cls.__annotations__[field_name]
-                if get_origin(annotation) is Annotated:
-                    _base_type, cast_func = get_args(annotation)
-                    rhs_value = cast_func(rhs_value)
-
-                # Convert to floats for comparison
-                try:
-                    lhs_float = float(lhs_value)
-                    rhs_float = float(rhs_value)
-                    is_valid = math.isclose(lhs_float, rhs_float)
-                except (TypeError, ValueError):
-                    # Non-numeric types, use equality
-                    is_valid = lhs_value == rhs_value
-                    lhs_float, rhs_float = lhs_value, rhs_value
-
-                if not is_valid:
-                    error_info = [
-                        f"  Field '{field_name}':",
-                        f"    Rule: {field_name} = {eq.rhs}",
-                        f"    Expected: {rhs_float}",
-                        f"    Got: {lhs_float}",
-                    ]
-
-                    # Try to add difference for numeric types
-                    try:
-                        diff = abs(lhs_float - rhs_float)
-                        error_info.append(f"    Difference: {diff}")
-                    except (TypeError, ValueError):
-                        pass  # Non-numeric types, skip difference
-
-                    validation_errors.append("\n".join(error_info))
-
-            # Validate lambdas
-            for field_name, (func, dependency_fields) in lambdas.items():
-                expected = func(**{param: kwargs[param] for param in dependency_fields})
-                actual = kwargs[field_name]
-
-                # Compare using math.isclose for numeric types, == for others
-                try:
-                    is_valid = math.isclose(expected, actual)
-                except (TypeError, ValueError):
-                    is_valid = expected == actual
-
-                if not is_valid:
-                    params_str = ", ".join(dependency_fields)
-                    error_info = [
-                        f"  Field '{field_name}':",
-                        f"    Rule: {field_name} = <callable({params_str})>",
-                        f"    Expected: {expected}",
-                        f"    Got: {actual}",
-                    ]
-
-                    # Try to add difference for numeric types
-                    try:
-                        diff = abs(expected - actual)
-                        error_info.append(f"    Difference: {diff}")
-                    except (TypeError, ValueError):
-                        pass  # Non-numeric types, skip difference
-
-                    validation_errors.append("\n".join(error_info))
-
-            if validation_errors:
-                field_word = "field" if len(validation_errors) == 1 else "fields"
-                error_message = (
-                    f"Validation failed for {len(validation_errors)} {field_word}.\n"
-                    + "\n".join(validation_errors)
-                )
-                raise ValueError(error_message)
+            _validate_fields(kwargs)
 
             original_init(self, **kwargs)
 
@@ -530,78 +527,7 @@ class SymFields:
                     )
 
             # Validate all rules with new values
-            validation_errors = []
-
-            # Validate sympy equations
-            for eq in equations:
-                field_name = str(eq.lhs)
-                eq_symbols = eq.free_symbols
-                subs_dict = {Symbol(k): values[k] for k in values if Symbol(k) in eq_symbols}
-
-                lhs_value = eq.lhs.subs(subs_dict)
-                rhs_value = eq.rhs.subs(subs_dict)
-
-                # Apply cast function to rhs_value if field has Annotated type
-                annotation = cls.__annotations__[field_name]
-                if get_origin(annotation) is Annotated:
-                    _base_type, cast_func = get_args(annotation)
-                    rhs_value = cast_func(rhs_value)
-
-                # Convert to floats for comparison
-                try:
-                    lhs_float = float(lhs_value)
-                    rhs_float = float(rhs_value)
-                    is_valid = math.isclose(lhs_float, rhs_float)
-                except (TypeError, ValueError):
-                    is_valid = lhs_value == rhs_value
-                    lhs_float, rhs_float = lhs_value, rhs_value
-
-                if not is_valid:
-                    error_info = [
-                        f"  Field '{field_name}':",
-                        f"    Rule: {field_name} = {eq.rhs}",
-                        f"    Expected: {rhs_float}",
-                        f"    Got: {lhs_float}",
-                    ]
-                    try:
-                        diff = abs(lhs_float - rhs_float)
-                        error_info.append(f"    Difference: {diff}")
-                    except (TypeError, ValueError):
-                        pass
-                    validation_errors.append("\n".join(error_info))
-
-            # Validate lambdas
-            for field_name, (func, dependency_fields) in lambdas.items():
-                expected = func(**{param: values[param] for param in dependency_fields})
-                actual = values[field_name]
-
-                try:
-                    is_valid = math.isclose(expected, actual)
-                except (TypeError, ValueError):
-                    is_valid = expected == actual
-
-                if not is_valid:
-                    params_str = ", ".join(dependency_fields)
-                    error_info = [
-                        f"  Field '{field_name}':",
-                        f"    Rule: {field_name} = <callable({params_str})>",
-                        f"    Expected: {expected}",
-                        f"    Got: {actual}",
-                    ]
-                    try:
-                        diff = abs(expected - actual)
-                        error_info.append(f"    Difference: {diff}")
-                    except (TypeError, ValueError):
-                        pass
-                    validation_errors.append("\n".join(error_info))
-
-            if validation_errors:
-                field_word = "field" if len(validation_errors) == 1 else "fields"
-                error_message = (
-                    f"Validation failed for {len(validation_errors)} {field_word}.\n"
-                    + "\n".join(validation_errors)
-                )
-                raise ValueError(error_message)
+            _validate_fields(values)
 
             # Update self with new values
             for field, value in values.items():
