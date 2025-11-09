@@ -1,10 +1,10 @@
-"""Test suite for SymFields .update() method."""
+"""Test suite for SymFields .update() method, __setattr__, and replace()."""
 
 from decimal import Decimal
 
 import pytest
 
-from symfields import S, SymFields
+from symfields import S, SymFields, replace
 
 
 class TestUpdateBasicForwardPropagation:
@@ -301,3 +301,248 @@ class TestUpdateComplexScenarios:
         assert chain.b == 9
         assert chain.c == 10
         assert chain.d == 11  # Forward from c
+
+
+class TestSetattr:
+    """Test __setattr__ integration with constraint propagation."""
+
+    def test_setattr_forward_propagation(self) -> None:
+        """Test that setting a field via attribute assignment propagates forward."""
+
+        class Sum(SymFields):
+            a: int = S
+            b: int = S
+            c: int = S("a") + S("b")
+
+        sum_ = Sum(a=1, b=2)
+        assert sum_.c == 3
+
+        # Set via attribute assignment
+        sum_.b = 3
+        assert sum_.a == 1
+        assert sum_.b == 3
+        assert sum_.c == 4  # Propagated
+
+    def test_setattr_backward_propagation(self) -> None:
+        """Test that setting a derived field inverts equations."""
+
+        class Temperature(SymFields):
+            celsius: float = S
+            fahrenheit: float = S("celsius") * 9 / 5 + 32
+
+        temp = Temperature(celsius=0.0)
+        assert temp.fahrenheit == 32.0
+
+        # Set derived field - should invert
+        temp.fahrenheit = 212.0
+        assert temp.celsius == 100.0
+        assert temp.fahrenheit == 212.0
+
+    def test_setattr_multi_round_propagation(self) -> None:
+        """Test that attribute assignment propagates through chains."""
+
+        class Chain(SymFields):
+            a: int = S
+            b: int = S("a") + 1
+            c: int = S("b") + 1
+
+        chain = Chain(a=1)
+        assert chain == Chain(a=1, b=2, c=3)
+
+        # Set b - should invert to a and forward to c
+        chain.b = 5
+        assert chain.a == 4
+        assert chain.b == 5
+        assert chain.c == 6
+
+    def test_setattr_equivalent_to_update(self) -> None:
+        """Test that setattr behaves identically to .update()."""
+
+        class Rectangle(SymFields):
+            width: float = S
+            height: float = S
+            area: float = S("width") * S("height")
+
+        rect1 = Rectangle(width=5.0, height=3.0)
+        rect2 = Rectangle(width=5.0, height=3.0)
+
+        # One via setattr, one via update
+        rect1.width = 10.0
+        rect2.update(width=10.0)
+
+        assert rect1.width == rect2.width
+        assert rect1.height == rect2.height
+        assert rect1.area == rect2.area
+
+    def test_setattr_with_lambdas(self) -> None:
+        """Test that setattr works with lambda fields."""
+
+        class Rectangle(SymFields):
+            width: int = S
+            height: int = S
+            area: int = S("width") * S("height")
+            label: str = S(lambda width, height: f"{width}x{height}")
+
+        rect = Rectangle(width=5, height=3)
+        assert rect.label == "5x3"
+
+        rect.width = 10
+        assert rect.label == "10x3"
+
+    def test_setattr_validation_error(self) -> None:
+        """Test that setattr raises validation errors for inconsistent state."""
+
+        class Rectangle(SymFields):
+            width: float = S
+            height: float = S
+            area: float = S("width") * S("height")
+
+        rect = Rectangle(width=5.0, height=3.0)
+
+        # Setting area is ambiguous
+        with pytest.raises(ValueError, match=r"Cannot determine|ambiguous|under-constrained"):
+            rect.area = 30.0
+
+
+class TestReplace:
+    """Test replace() function for immutable-style updates."""
+
+    def test_replace_basic(self) -> None:
+        """Test basic replace functionality."""
+
+        class Sum(SymFields):
+            a: int = S
+            b: int = S
+            c: int = S("a") + S("b")
+
+        original = Sum(a=1, b=2)
+        assert original.c == 3
+
+        # Replace returns new instance
+        new = replace(original, b=3)
+
+        # Original unchanged
+        assert original.a == 1
+        assert original.b == 2
+        assert original.c == 3
+
+        # New has updated values
+        assert new.a == 1
+        assert new.b == 3
+        assert new.c == 4
+
+    def test_replace_forward_propagation(self) -> None:
+        """Test that replace propagates changes forward."""
+
+        class Circle(SymFields):
+            radius: float = S
+            diameter: float = S("radius") * 2
+
+        original = Circle(radius=5.0)
+        new = replace(original, radius=10.0)
+
+        assert original.radius == 5.0
+        assert original.diameter == 10.0
+
+        assert new.radius == 10.0
+        assert new.diameter == 20.0
+
+    def test_replace_backward_propagation(self) -> None:
+        """Test that replace can invert equations."""
+
+        class Temperature(SymFields):
+            celsius: float = S
+            fahrenheit: float = S("celsius") * 9 / 5 + 32
+
+        original = Temperature(celsius=0.0)
+        new = replace(original, fahrenheit=212.0)
+
+        assert original.celsius == 0.0
+        assert original.fahrenheit == 32.0
+
+        assert new.celsius == 100.0
+        assert new.fahrenheit == 212.0
+
+    def test_replace_multiple_fields(self) -> None:
+        """Test replacing multiple fields at once."""
+
+        class Sum(SymFields):
+            a: int = S
+            b: int = S
+            c: int = S("a") + S("b")
+
+        original = Sum(a=1, b=2, c=3)
+        new = replace(original, a=5, b=10)
+
+        assert original.a == 1
+        assert original.b == 2
+        assert original.c == 3
+
+        assert new.a == 5
+        assert new.b == 10
+        assert new.c == 15
+
+    def test_replace_preserves_type(self) -> None:
+        """Test that replace returns the same type."""
+
+        class MyClass(SymFields):
+            a: int = S
+            b: int = S("a") * 2
+
+        original = MyClass(a=5)
+        new = replace(original, a=10)
+
+        assert isinstance(new, MyClass)
+        assert type(new) is type(original)
+
+    def test_replace_with_annotated(self) -> None:
+        """Test that replace maintains Annotated precision."""
+        from decimal import ROUND_HALF_UP
+        from typing import Annotated, Any
+
+        def cast_2_places(value: Any) -> Decimal:
+            return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        class Price(SymFields):
+            subtotal: Decimal = S
+            total: Annotated[Decimal, cast_2_places] = S("subtotal") * Decimal("1.23")
+
+        original = Price(subtotal=Decimal("10.00"))
+        new = replace(original, subtotal=Decimal("20.00"))
+
+        assert original.total == Decimal("12.30")
+        assert new.total == Decimal("24.60")
+
+    def test_replace_no_fields_returns_different_instance(self) -> None:
+        """Test that replace with no changes creates a new instance."""
+
+        class Sum(SymFields):
+            a: int = S
+            b: int = S
+            c: int = S("a") + S("b")
+
+        original = Sum(a=1, b=2)
+        new = replace(original)
+
+        # Different instances
+        assert original is not new
+
+        # Same values
+        assert new.a == original.a
+        assert new.b == original.b
+        assert new.c == original.c
+
+    def test_replace_validation_error(self) -> None:
+        """Test that replace raises validation errors."""
+
+        class Rectangle(SymFields):
+            width: float = S
+            height: float = S
+            area: float = S("width") * S("height")
+
+        original = Rectangle(width=5.0, height=3.0)
+
+        # Replacing only area is ambiguous - can't determine width/height
+        # This will fail during __init__ when trying to solve the system
+        with pytest.raises(ValueError, match=r"Cannot calculate all fields|Validation failed"):
+            replace(original, area=30.0)

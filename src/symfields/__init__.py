@@ -4,12 +4,15 @@ import inspect
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Annotated, Any, Union, get_args, get_origin
+from typing import Annotated, Any, TypeVar, Union, get_args, get_origin
 
 from sympy import Eq, Expr, Symbol, solve
 from typing_extensions import dataclass_transform
 
-__all__ = ["S", "SymFields"]
+__all__ = ["S", "SymFields", "replace"]
+
+# TypeVar for replace() to preserve concrete type
+T = TypeVar("T", bound="SymFields")
 
 
 class _SentinelSymbol:
@@ -117,6 +120,10 @@ class SymFields:
 
     def update(self, **kwargs: Any) -> None:
         """Update field values and propagate changes through the constraint system."""
+        ...  # Implementation added by __init_subclass__
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Set attribute and propagate changes through constraint system."""
         ...  # Implementation added by __init_subclass__
 
     def __init_subclass__(cls) -> None:
@@ -600,5 +607,79 @@ class SymFields:
             for field, value in values.items():
                 object.__setattr__(self, field, value)
 
+        def __setattr__(self: SymFields, name: str, value: Any) -> None:
+            """Set attribute and propagate changes through constraint system.
+
+            Setting a field triggers the same constraint propagation as .update().
+
+            Args:
+                name: Field name to set
+                value: New value for the field
+
+            Example:
+                temp = Temperature(celsius=0.0)
+                temp.celsius = 100.0  # Equivalent to temp.update(celsius=100.0)
+            """
+            # Check if this is a defined field AND object is already initialized
+            # (During __init__, fields don't exist yet, so hasattr returns False)
+            if name in cls.__annotations__ and hasattr(self, name):
+                # Object is initialized, use update to propagate changes
+                self.update(**{name: value})
+            else:
+                # During initialization or not a SymField - use normal setattr
+                object.__setattr__(self, name, value)
+
         cls.__init__ = __init__  # type: ignore[assignment]
         cls.update = update  # type: ignore[assignment]
+        cls.__setattr__ = __setattr__  # type: ignore[assignment]
+
+
+def replace(obj: T, **kwargs: Any) -> T:
+    """Create a new instance with updated fields, mirroring dataclasses.replace().
+
+    This function creates a new instance of the same type as `obj`, with field values
+    updated according to `kwargs`. The original instance remains unchanged (immutable pattern).
+
+    Changes propagate through the constraint system using the same forward/backward
+    propagation as .update().
+
+    Args:
+        obj: The SymFields instance to replace fields on
+        **kwargs: Field names and new values
+
+    Returns:
+        A new instance of the same type with updated values
+
+    Example:
+        >>> temp = Temperature(celsius=0.0)
+        >>> new_temp = replace(temp, fahrenheit=212.0)
+        >>> temp.celsius  # Original unchanged
+        0.0
+        >>> new_temp.celsius  # New instance has inverted value
+        100.0
+
+    Note:
+        Like dataclasses.replace(), this always returns a new instance,
+        even if no fields are changed.
+    """
+    # Identify derived fields (fields that are LHS of equations)
+    derived_fields = {str(eq.lhs) for eq in type(obj)._equations}
+    derived_fields |= set(type(obj)._lambdas.keys())
+
+    # Get independent fields (fields that are not derived)
+    independent_fields = set(obj.__annotations__) - derived_fields
+
+    # Check if we're replacing any derived fields
+    replacing_derived = bool(set(kwargs.keys()) & derived_fields)
+
+    if replacing_derived:
+        # If replacing derived fields, ONLY pass kwargs (let constructor solve backward)
+        # Don't include original independent values as they may conflict
+        init_kwargs = dict(kwargs)
+    else:
+        # If only replacing independent fields, pass all independent fields
+        init_kwargs = {field: getattr(obj, field) for field in independent_fields}
+        init_kwargs.update(kwargs)
+
+    # Create new instance - this will trigger constraint propagation
+    return type(obj)(**init_kwargs)
