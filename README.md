@@ -56,7 +56,7 @@ s = Sum(b=2.0, c=3.0)
 - **Validation**: Automatically validates that all provided values satisfy the rules
 - **Flexible rules**: Use sympy expressions (invertible) or lambdas/callables (forward-only) for any type
 - **Precision control**: Use `Annotated` types with custom cast functions to control decimal precision and rounding
-- **Field updates**: Use `.update()` to modify fields after creation with automatic constraint propagation
+- **Field updates**: Use `.update()`, direct assignment (`obj.field = value`), or `replace(obj, field=value)` for updates
 
 ## Examples
 
@@ -250,6 +250,43 @@ chain = Chain(a=1)  # a=1, b=2, c=3, d=4
 
 # Update c - inverts back to b and a, then forward to d
 chain.update(c=10)  # a=8, b=9, c=10, d=11
+```
+
+**Direct Field Assignment**
+
+You can also update fields using direct assignment - it's equivalent to calling `.update()`:
+
+```python
+temp = Temperature(celsius=0.0)
+
+# Direct assignment - automatically propagates changes
+temp.celsius = 100.0  # Equivalent to temp.update(celsius=100.0)
+# Temperature(celsius=100.0, fahrenheit=212.0)
+
+temp.fahrenheit = 32.0  # Equivalent to temp.update(fahrenheit=32.0)
+# Temperature(celsius=0.0, fahrenheit=32.0)
+```
+
+**Immutable Updates with replace()**
+
+For immutable-style updates (like `dataclasses.replace()`), use the `replace()` function:
+
+```python
+from symfields import replace
+
+original = Temperature(celsius=0.0)
+# Temperature(celsius=0.0, fahrenheit=32.0)
+
+# Create new instance with updated value - original unchanged
+new_temp = replace(original, fahrenheit=212.0)
+
+# Original unchanged
+assert original.celsius == 0.0
+assert original.fahrenheit == 32.0
+
+# New instance has updated values
+assert new_temp.celsius == 100.0  # Inverted from fahrenheit
+assert new_temp.fahrenheit == 212.0
 ```
 
 **Complex Financial Calculations**
