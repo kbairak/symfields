@@ -1,6 +1,8 @@
 """Test suite for SymFields library."""
 
 import math
+from decimal import Decimal, ROUND_HALF_UP, ROUND_DOWN, ROUND_UP
+from typing import Annotated
 
 import pytest
 from sympy import cos, exp, log, pi, sin, sqrt, tan
@@ -546,3 +548,189 @@ class TestAdvancedMathExpressions:
         # Backward: solve for velocity given distance and time
         p2 = Physics(distance=expected, time=1)
         assert math.isclose(p2.velocity, 10)
+
+
+class TestAnnotatedCastFunctions:
+    """Test Annotated type hints with custom cast functions for precision control."""
+
+    def test_decimal_precision_2_places(self) -> None:
+        """Test Decimal precision control with 2 decimal places."""
+
+        def cast_2_places(value):
+            return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        class Price(SymFields):
+            subtotal: Decimal = S
+            vat_rate: Decimal = S
+            total: Annotated[Decimal, cast_2_places] = S("subtotal") * (1 + S("vat_rate"))
+
+        # Forward: calculate total with rounding
+        p = Price(subtotal=Decimal("10.00"), vat_rate=Decimal("0.23"))
+        assert p.total == Decimal("12.30")
+        assert p.total.as_tuple().exponent == -2  # 2 decimal places
+
+    def test_decimal_precision_4_places(self) -> None:
+        """Test Decimal precision control with 4 decimal places."""
+
+        def cast_4_places(value):
+            return Decimal(str(value)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        class Financial(SymFields):
+            amount: Decimal = S
+            rate: Decimal = S
+            result: Annotated[Decimal, cast_4_places] = S("amount") * S("rate")
+
+        f = Financial(amount=Decimal("100"), rate=Decimal("1.23456789"))
+        assert f.result == Decimal("123.4568")  # Rounded up from 123.456789
+        assert f.result.as_tuple().exponent == -4  # 4 decimal places
+
+    def test_decimal_rounding_modes(self) -> None:
+        """Test different rounding modes with Decimal."""
+
+        def cast_round_down(value):
+            return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+
+        def cast_round_up(value):
+            return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_UP)
+
+        class RoundDown(SymFields):
+            base: Decimal = S
+            result: Annotated[Decimal, cast_round_down] = S("base") * Decimal("1.234")
+
+        class RoundUp(SymFields):
+            base: Decimal = S
+            result: Annotated[Decimal, cast_round_up] = S("base") * Decimal("1.234")
+
+        rd = RoundDown(base=Decimal("10"))
+        assert rd.result == Decimal("12.34")  # Rounded down from 12.340
+
+        ru = RoundUp(base=Decimal("10"))
+        assert ru.result == Decimal("12.34")  # Rounded up from 12.340
+
+        # Test with a value that shows difference
+        rd2 = RoundDown(base=Decimal("10.001"))
+        assert rd2.result == Decimal("12.34")  # Down from 12.341234
+
+        ru2 = RoundUp(base=Decimal("10.001"))
+        assert ru2.result == Decimal("12.35")  # Up from 12.341234
+
+    def test_decimal_backward_solving_with_precision(self) -> None:
+        """Test that backward solving works with Annotated cast functions."""
+
+        def cast_2_places(value):
+            return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        class Price(SymFields):
+            subtotal: Decimal = S
+            total: Annotated[Decimal, cast_2_places] = S("subtotal") * Decimal("1.23")
+
+        # Backward: solve for subtotal given total
+        p = Price(total=Decimal("12.30"))
+        # 12.30 / 1.23 = 10.0
+        assert p.subtotal == Decimal("10.0")
+        # Verify total is still properly rounded
+        assert p.total == Decimal("12.30")
+
+    def test_multiple_annotated_fields(self) -> None:
+        """Test multiple fields with different cast functions."""
+
+        def cast_2_places(value):
+            return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        def cast_4_places(value):
+            return Decimal(str(value)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        class Invoice(SymFields):
+            subtotal: Decimal = S
+            tax_rate: Decimal = S
+            tax: Annotated[Decimal, cast_2_places] = S("subtotal") * S("tax_rate")
+            total: Annotated[Decimal, cast_2_places] = S("subtotal") + S("tax")
+            precise_calc: Annotated[Decimal, cast_4_places] = S("total") * Decimal("1.001")
+
+        inv = Invoice(subtotal=Decimal("100.00"), tax_rate=Decimal("0.23"))
+
+        assert inv.tax == Decimal("23.00")
+        assert inv.tax.as_tuple().exponent == -2
+
+        assert inv.total == Decimal("123.00")
+        assert inv.total.as_tuple().exponent == -2
+
+        assert inv.precise_calc == Decimal("123.1230")
+        assert inv.precise_calc.as_tuple().exponent == -4
+
+    def test_annotated_with_complex_expression(self) -> None:
+        """Test Annotated cast with complex sympy expressions."""
+
+        def cast_3_places(value):
+            return Decimal(str(value)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+
+        class Compound(SymFields):
+            principal: Decimal = S
+            rate: Decimal = S
+            time: Decimal = S
+            # Compound interest: A = P(1 + r)^t
+            amount: Annotated[Decimal, cast_3_places] = (
+                S("principal") * (1 + S("rate")) ** S("time")
+            )
+
+        c = Compound(
+            principal=Decimal("1000"),
+            rate=Decimal("0.05"),
+            time=Decimal("2")
+        )
+
+        # 1000 * 1.05^2 = 1102.5
+        assert c.amount == Decimal("1102.500")
+        assert c.amount.as_tuple().exponent == -3
+
+    def test_annotated_validation_error_detection(self) -> None:
+        """Test that validation still works with Annotated cast functions."""
+
+        def cast_2_places(value):
+            return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        class Price(SymFields):
+            subtotal: Decimal = S
+            total: Annotated[Decimal, cast_2_places] = S("subtotal") * Decimal("1.23")
+
+        # This should work fine
+        p = Price(subtotal=Decimal("10.00"))
+        assert p.total == Decimal("12.30")
+
+    def test_annotated_invalid_arguments_count(self) -> None:
+        """Test that Annotated with wrong number of arguments raises TypeError."""
+
+        with pytest.raises(TypeError, match="must have exactly 2 arguments"):
+            class Bad1(SymFields):
+                x: Annotated[Decimal] = S  # Missing cast function
+
+        with pytest.raises(TypeError, match="must have exactly 2 arguments"):
+            class Bad2(SymFields):
+                x: Annotated[Decimal, lambda v: v, "extra"] = S  # Too many args
+
+    def test_annotated_non_callable(self) -> None:
+        """Test that Annotated with non-callable raises TypeError."""
+
+        with pytest.raises(TypeError, match="must be callable"):
+            class BadCallable(SymFields):
+                x: Annotated[Decimal, "not_a_function"] = S
+
+        with pytest.raises(TypeError, match="must be callable"):
+            class BadCallable2(SymFields):
+                x: Annotated[Decimal, 123] = S
+
+    def test_annotated_wrong_parameter_count(self) -> None:
+        """Test that cast function must have exactly 1 required parameter."""
+
+        with pytest.raises(TypeError, match="must have exactly 1 required parameter"):
+            class NoParams(SymFields):
+                x: Annotated[Decimal, lambda: Decimal("0")] = S
+
+        with pytest.raises(TypeError, match="must have exactly 1 required parameter"):
+            class TwoParams(SymFields):
+                x: Annotated[Decimal, lambda a, b: Decimal(a)] = S
+
+        # Optional parameters should be rejected too (no defaults allowed)
+        with pytest.raises(TypeError, match="must have exactly 1 required parameter"):
+            class OptionalParam(SymFields):
+                x: Annotated[Decimal, lambda a, b=1: Decimal(a)] = S
