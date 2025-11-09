@@ -56,6 +56,7 @@ s = Sum(b=2.0, c=3.0)
 - **Validation**: Automatically validates that all provided values satisfy the rules
 - **Flexible rules**: Use sympy expressions (invertible) or lambdas/callables (forward-only) for any type
 - **Precision control**: Use `Annotated` types with custom cast functions to control decimal precision and rounding
+- **Field updates**: Use `.update()` to modify fields after creation with automatic constraint propagation
 
 ## Examples
 
@@ -212,6 +213,45 @@ class Invoice(SymFields):
 
 **Note:** The cast function must accept exactly one parameter (the value to cast). It's applied both when solving fields and during validation.
 
+**Updating Fields After Creation**
+
+You can update fields after instance creation using the `.update()` method. Changes propagate automatically through the constraint system:
+
+```python
+class Temperature(SymFields):
+    celsius: float = S
+    fahrenheit: float = S("celsius") * 9/5 + 32
+
+temp = Temperature(celsius=0.0)
+# Temperature(celsius=0.0, fahrenheit=32.0)
+
+# Update celsius - fahrenheit propagates forward
+temp.update(celsius=100.0)
+# Temperature(celsius=100.0, fahrenheit=212.0)
+
+# Update fahrenheit - celsius propagates backward
+temp.update(fahrenheit=32.0)
+# Temperature(celsius=0.0, fahrenheit=32.0)
+```
+
+The `.update()` method uses intelligent constraint propagation:
+- **Forward propagation**: When you change a field, derived fields that depend on it are recalculated
+- **Backward propagation**: When you change a derived field, the system inverts equations to solve for input fields
+- **Multi-round propagation**: Changes cascade through long dependency chains automatically
+
+```python
+class Chain(SymFields):
+    a: int = S
+    b: int = S("a") + 1
+    c: int = S("b") + 1
+    d: int = S("c") + 1
+
+chain = Chain(a=1)  # a=1, b=2, c=3, d=4
+
+# Update c - inverts back to b and a, then forward to d
+chain.update(c=10)  # a=8, b=9, c=10, d=11
+```
+
 **Complex Financial Calculations**
 ```python
 from decimal import Decimal
@@ -281,7 +321,6 @@ make mypy
 
 Planned improvements and features:
 
-- [ ] **Add `.update()` method** - Allow updating fields after instance creation with constraint propagation (treat non-changed fields as fixed, propagate through derived fields only)
 - [ ] **Publish to PyPI** - Make the package available via `pip install symfields`
 - [ ] **Add README badges** - CI status, PyPI version, Python versions, license
 
