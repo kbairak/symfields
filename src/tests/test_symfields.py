@@ -1,8 +1,8 @@
 """Test suite for SymFields library."""
 
 import math
-from decimal import Decimal, ROUND_HALF_UP, ROUND_DOWN, ROUND_UP
-from typing import Annotated
+from decimal import ROUND_DOWN, ROUND_HALF_UP, ROUND_UP, Decimal
+from typing import Annotated, Any
 
 import pytest
 from sympy import cos, exp, log, pi, sin, sqrt, tan
@@ -556,7 +556,7 @@ class TestAnnotatedCastFunctions:
     def test_decimal_precision_2_places(self) -> None:
         """Test Decimal precision control with 2 decimal places."""
 
-        def cast_2_places(value):
+        def cast_2_places(value: Any) -> Decimal:
             return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         class Price(SymFields):
@@ -572,7 +572,7 @@ class TestAnnotatedCastFunctions:
     def test_decimal_precision_4_places(self) -> None:
         """Test Decimal precision control with 4 decimal places."""
 
-        def cast_4_places(value):
+        def cast_4_places(value: Any) -> Decimal:
             return Decimal(str(value)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
         class Financial(SymFields):
@@ -587,10 +587,10 @@ class TestAnnotatedCastFunctions:
     def test_decimal_rounding_modes(self) -> None:
         """Test different rounding modes with Decimal."""
 
-        def cast_round_down(value):
+        def cast_round_down(value: Any) -> Decimal:
             return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
 
-        def cast_round_up(value):
+        def cast_round_up(value: Any) -> Decimal:
             return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_UP)
 
         class RoundDown(SymFields):
@@ -617,7 +617,7 @@ class TestAnnotatedCastFunctions:
     def test_decimal_backward_solving_with_precision(self) -> None:
         """Test that backward solving works with Annotated cast functions."""
 
-        def cast_2_places(value):
+        def cast_2_places(value: Any) -> Decimal:
             return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         class Price(SymFields):
@@ -634,10 +634,10 @@ class TestAnnotatedCastFunctions:
     def test_multiple_annotated_fields(self) -> None:
         """Test multiple fields with different cast functions."""
 
-        def cast_2_places(value):
+        def cast_2_places(value: Any) -> Decimal:
             return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-        def cast_4_places(value):
+        def cast_4_places(value: Any) -> Decimal:
             return Decimal(str(value)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
         class Invoice(SymFields):
@@ -661,7 +661,7 @@ class TestAnnotatedCastFunctions:
     def test_annotated_with_complex_expression(self) -> None:
         """Test Annotated cast with complex sympy expressions."""
 
-        def cast_3_places(value):
+        def cast_3_places(value: Any) -> Decimal:
             return Decimal(str(value)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
 
         class Compound(SymFields):
@@ -686,7 +686,7 @@ class TestAnnotatedCastFunctions:
     def test_annotated_validation_error_detection(self) -> None:
         """Test that validation still works with Annotated cast functions."""
 
-        def cast_2_places(value):
+        def cast_2_places(value: Any) -> Decimal:
             return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         class Price(SymFields):
@@ -700,10 +700,12 @@ class TestAnnotatedCastFunctions:
     def test_annotated_invalid_arguments_count(self) -> None:
         """Test that Annotated with wrong number of arguments raises TypeError."""
 
-        with pytest.raises(TypeError, match="must have exactly 2 arguments"):
+        # Python's typing module raises error for missing annotation
+        with pytest.raises(TypeError, match="at least two arguments"):
             class Bad1(SymFields):
-                x: Annotated[Decimal] = S  # Missing cast function
+                x: Annotated[Decimal] = S  # type: ignore[valid-type]  # Missing cast function (intentional for test)
 
+        # Extra arguments are allowed by typing module, but our validation will catch it
         with pytest.raises(TypeError, match="must have exactly 2 arguments"):
             class Bad2(SymFields):
                 x: Annotated[Decimal, lambda v: v, "extra"] = S  # Too many args

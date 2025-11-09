@@ -4,7 +4,7 @@ import inspect
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Union
+from typing import Annotated, Any, Union, get_args, get_origin
 
 from sympy import Eq, Expr, Symbol, solve
 from typing_extensions import dataclass_transform
@@ -114,6 +114,37 @@ class SymFields:
     # Class-level attributes added by __init_subclass__
     def __init_subclass__(cls) -> None:
         """Process class definition to extract symbolic rules and lambdas."""
+        # Validate Annotated fields first
+        for name, annotation in cls.__annotations__.items():
+            if get_origin(annotation) is Annotated:
+                args = get_args(annotation)
+
+                # Must have exactly 2 args: type and callable
+                if len(args) != 2:
+                    raise TypeError(
+                        f"Field '{name}': Annotated must have exactly 2 arguments "
+                        f"(type and callable), got {len(args)}"
+                    )
+
+                _base_type, cast_func = args
+
+                # Second arg must be callable
+                if not callable(cast_func):
+                    raise TypeError(
+                        f"Field '{name}': second argument of Annotated must be callable, "
+                        f"got {type(cast_func).__name__}"
+                    )
+
+                # Must have exactly 1 parameter (no optional parameters allowed)
+                sig = inspect.signature(cast_func)
+                params = list(sig.parameters.values())
+
+                if len(params) != 1:
+                    raise TypeError(
+                        f"Field '{name}': cast function must have exactly 1 required parameter, "
+                        f"got {len(params)}"
+                    )
+
         equations, lambdas = [], {}
         for name in cls.__annotations__:
             if not hasattr(cls, name):
@@ -171,12 +202,21 @@ class SymFields:
                 if hasattr(value, "is_real") and value.is_real is False:
                     continue
 
-                try:
-                    kwargs[str(symbol)] = cls.__annotations__[str(symbol)](value)
-                except (TypeError, ValueError):
-                    kwargs[str(symbol)] = float(value)
-                known_fields.add(str(symbol))
-                unknown_fields.remove(str(symbol))
+                field_name = str(symbol)
+                annotation = cls.__annotations__[field_name]
+
+                # Check if using Annotated with cast function
+                if get_origin(annotation) is Annotated:
+                    _base_type, cast_func = get_args(annotation)
+                    kwargs[field_name] = cast_func(value)
+                else:
+                    # Current behavior
+                    try:
+                        kwargs[field_name] = annotation(value)
+                    except (TypeError, ValueError):
+                        kwargs[field_name] = float(value)
+                known_fields.add(field_name)
+                unknown_fields.remove(field_name)
 
             # Check if sympy couldn't solve everything
             non_lambda_unknowns = unknown_fields - lambdas.keys()
@@ -248,6 +288,12 @@ class SymFields:
                 # Substitute and evaluate
                 lhs_value = eq.lhs.subs(subs_dict)
                 rhs_value = eq.rhs.subs(subs_dict)
+
+                # Apply cast function to rhs_value if field has Annotated type
+                annotation = cls.__annotations__[field_name]
+                if get_origin(annotation) is Annotated:
+                    _base_type, cast_func = get_args(annotation)
+                    rhs_value = cast_func(rhs_value)
 
                 # Convert to floats for comparison
                 try:
