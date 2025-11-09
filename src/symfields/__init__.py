@@ -112,6 +112,13 @@ class SymFields:
     """
 
     # Class-level attributes added by __init_subclass__
+    _equations: list[Any]  # type: ignore[misc]
+    _lambdas: dict[str, tuple[Any, list[str]]]  # type: ignore[misc]
+
+    def update(self, **kwargs: Any) -> None:
+        """Update field values and propagate changes through the constraint system."""
+        ...  # Implementation added by __init_subclass__
+
     def __init_subclass__(cls) -> None:
         """Process class definition to extract symbolic rules and lambdas."""
         # Validate Annotated fields first
@@ -177,7 +184,11 @@ class SymFields:
                 lambdas[name] = (func, dependency_fields)
             delattr(cls, name)
 
-        dataclass(cls, frozen=True)
+        # Store equations and lambdas as class attributes for use in update()
+        cls._equations = equations
+        cls._lambdas = lambdas
+
+        dataclass(cls, frozen=False)
         original_init = cls.__init__
 
         def __init__(self: SymFields, **kwargs: Any) -> None:
@@ -361,4 +372,233 @@ class SymFields:
 
             original_init(self, **kwargs)
 
+        def update(self: SymFields, **kwargs: Any) -> None:
+            """Update field values and propagate changes through the constraint system.
+
+            Args:
+                **kwargs: Field values to update
+
+            Raises:
+                ValueError: If update would create inconsistent or underconstrained state
+            """
+            # Validate that all kwargs are valid fields
+            for field in kwargs:
+                if field not in cls.__annotations__:
+                    raise ValueError(f"Field '{field}' is not defined in {cls.__name__}")
+
+            # Start with current values + updates
+            values = {field: getattr(self, field) for field in cls.__annotations__}
+            values.update(kwargs)
+            changed = set(kwargs.keys())
+
+            # Propagation loop - forward and backward passes
+            max_iterations = 100  # Safety limit
+            for _iteration in range(max_iterations):
+                progress = False
+
+                # Forward pass: solve for LHS fields that aren't changed yet
+                for eq in equations:
+                    lhs_field = str(eq.lhs)
+                    eq_symbols = {str(s) for s in eq.free_symbols}
+                    rhs_symbols = eq_symbols - {lhs_field}
+
+
+                    # Forward: if LHS unchanged and all RHS known and at least one RHS changed
+                    if (
+                        lhs_field not in changed
+                        and all(s in values for s in rhs_symbols)
+                        and any(s in changed for s in rhs_symbols)
+                    ):
+                        # Substitute and solve
+                        subs = {Symbol(k): values[k] for k in rhs_symbols}
+                        new_value = eq.rhs.subs(subs)
+
+                        # Check if value is still symbolic
+                        if hasattr(new_value, "free_symbols") and new_value.free_symbols:
+                            continue
+
+                        # Check if value is complex
+                        if hasattr(new_value, "is_real") and new_value.is_real is False:
+                            continue
+
+                        # Apply cast function if using Annotated
+                        annotation = cls.__annotations__[lhs_field]
+                        if get_origin(annotation) is Annotated:
+                            _base_type, cast_func = get_args(annotation)
+                            values[lhs_field] = cast_func(new_value)
+                        else:
+                            try:
+                                values[lhs_field] = annotation(new_value)
+                            except (TypeError, ValueError):
+                                values[lhs_field] = float(new_value)
+
+                        changed.add(lhs_field)
+                        progress = True
+
+                # Backward pass: invert rules where LHS is changed and exactly one RHS is unknown
+                for eq in equations:
+                    lhs_field = str(eq.lhs)
+                    eq_symbols = {str(s) for s in eq.free_symbols}
+                    rhs_symbols = eq_symbols - {lhs_field}
+
+
+                    # If LHS is changed, check for invertible rules
+                    if lhs_field in changed:
+                        unknown_rhs = rhs_symbols - changed
+
+                        # Exactly one unknown RHS - we can invert
+                        if len(unknown_rhs) == 1:
+                            unknown_field = next(iter(unknown_rhs))
+
+                            # Substitute known values (changed fields + LHS)
+                            known_symbols = (changed & rhs_symbols) | {lhs_field}
+                            subs = {Symbol(k): values[k] for k in known_symbols}
+
+
+                            # Solve for the unknown field
+                            solutions_list = solve(eq.subs(subs), Symbol(unknown_field))
+
+                            if solutions_list:
+                                # Extract solution
+                                if isinstance(solutions_list, list):
+                                    # Filter for real solutions
+                                    real_solutions = []
+                                    for sol in solutions_list:
+                                        if not hasattr(sol, "is_real") or sol.is_real is not False:
+                                            real_solutions.append(sol)
+                                    solution = (
+                                        real_solutions[0] if real_solutions else solutions_list[0]
+                                    )
+                                else:
+                                    solution = solutions_list
+
+                                # Check if solution is still symbolic
+                                if hasattr(solution, "free_symbols") and solution.free_symbols:
+                                    continue
+
+                                # Check if solution is complex
+                                if hasattr(solution, "is_real") and solution.is_real is False:
+                                    continue
+
+                                # Apply cast function if using Annotated
+                                annotation = cls.__annotations__[unknown_field]
+                                if get_origin(annotation) is Annotated:
+                                    _base_type, cast_func = get_args(annotation)
+                                    values[unknown_field] = cast_func(solution)
+                                else:
+                                    try:
+                                        values[unknown_field] = annotation(solution)
+                                    except (TypeError, ValueError):
+                                        values[unknown_field] = float(solution)
+
+                                changed.add(unknown_field)
+                                progress = True
+
+                # Handle lambdas - forward only
+                for field, (func, dependency_fields) in lambdas.items():
+                    if field not in changed and all(d in changed for d in dependency_fields):
+                        call_kwargs = {param: values[param] for param in dependency_fields}
+                        values[field] = func(**call_kwargs)
+                        changed.add(field)
+                        progress = True
+
+                if not progress:
+                    break
+            else:
+                # Hit max iterations - probably a bug
+                raise RuntimeError(
+                    f"Update propagation did not converge after {max_iterations} iterations"
+                )
+
+            # Check for fields in equations that couldn't be determined
+            for eq in equations:
+                eq_symbols = {str(s) for s in eq.free_symbols}
+                # If equation contains any changed field but not all fields are in changed, error
+                if eq_symbols & changed and not (eq_symbols <= changed):
+                    unsolved = eq_symbols - changed
+                    raise ValueError(
+                        f"Cannot determine values for fields {unsolved} - "
+                        f"update is ambiguous or under-constrained. "
+                        f"Changed fields: {changed}"
+                    )
+
+            # Validate all rules with new values
+            validation_errors = []
+
+            # Validate sympy equations
+            for eq in equations:
+                field_name = str(eq.lhs)
+                eq_symbols = eq.free_symbols
+                subs_dict = {Symbol(k): values[k] for k in values if Symbol(k) in eq_symbols}
+
+                lhs_value = eq.lhs.subs(subs_dict)
+                rhs_value = eq.rhs.subs(subs_dict)
+
+                # Apply cast function to rhs_value if field has Annotated type
+                annotation = cls.__annotations__[field_name]
+                if get_origin(annotation) is Annotated:
+                    _base_type, cast_func = get_args(annotation)
+                    rhs_value = cast_func(rhs_value)
+
+                # Convert to floats for comparison
+                try:
+                    lhs_float = float(lhs_value)
+                    rhs_float = float(rhs_value)
+                    is_valid = math.isclose(lhs_float, rhs_float)
+                except (TypeError, ValueError):
+                    is_valid = lhs_value == rhs_value
+                    lhs_float, rhs_float = lhs_value, rhs_value
+
+                if not is_valid:
+                    error_info = [
+                        f"  Field '{field_name}':",
+                        f"    Rule: {field_name} = {eq.rhs}",
+                        f"    Expected: {rhs_float}",
+                        f"    Got: {lhs_float}",
+                    ]
+                    try:
+                        diff = abs(lhs_float - rhs_float)
+                        error_info.append(f"    Difference: {diff}")
+                    except (TypeError, ValueError):
+                        pass
+                    validation_errors.append("\n".join(error_info))
+
+            # Validate lambdas
+            for field_name, (func, dependency_fields) in lambdas.items():
+                expected = func(**{param: values[param] for param in dependency_fields})
+                actual = values[field_name]
+
+                try:
+                    is_valid = math.isclose(expected, actual)
+                except (TypeError, ValueError):
+                    is_valid = expected == actual
+
+                if not is_valid:
+                    params_str = ", ".join(dependency_fields)
+                    error_info = [
+                        f"  Field '{field_name}':",
+                        f"    Rule: {field_name} = <callable({params_str})>",
+                        f"    Expected: {expected}",
+                        f"    Got: {actual}",
+                    ]
+                    try:
+                        diff = abs(expected - actual)
+                        error_info.append(f"    Difference: {diff}")
+                    except (TypeError, ValueError):
+                        pass
+                    validation_errors.append("\n".join(error_info))
+
+            if validation_errors:
+                field_word = "field" if len(validation_errors) == 1 else "fields"
+                error_message = (
+                    f"Validation failed for {len(validation_errors)} {field_word}.\n"
+                    + "\n".join(validation_errors)
+                )
+                raise ValueError(error_message)
+
+            # Update self with new values
+            for field, value in values.items():
+                object.__setattr__(self, field, value)
+
         cls.__init__ = __init__  # type: ignore[assignment]
+        cls.update = update  # type: ignore[assignment]

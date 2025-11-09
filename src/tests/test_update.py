@@ -186,9 +186,9 @@ class TestUpdateWithDecimalPrecision:
     def test_update_maintains_precision(self) -> None:
         """Test that updates maintain decimal precision from Annotated."""
         from decimal import ROUND_HALF_UP
-        from typing import Annotated
+        from typing import Annotated, Any
 
-        def cast_2_places(value):
+        def cast_2_places(value: Any) -> Decimal:
             return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         class Price(SymFields):
@@ -220,11 +220,11 @@ class TestUpdateErrorCases:
 
         # Updating area alone is ambiguous - should width change? height? both?
         # Can't determine which field to update
-        with pytest.raises(ValueError, match="Cannot determine|ambiguous|under-constrained"):
+        with pytest.raises(ValueError, match=r"Cannot determine|ambiguous|under-constrained"):
             rect.update(area=30.0)
 
-    def test_cannot_create_underconstrained_state(self) -> None:
-        """Test that updates that would create underconstrained state fail."""
+    def test_update_independent_field_propagates_forward(self) -> None:
+        """Test that updating an independent field propagates forward correctly."""
 
         class Rectangle(SymFields):
             width: float = S
@@ -233,9 +233,11 @@ class TestUpdateErrorCases:
 
         rect = Rectangle(width=5.0, height=3.0)
 
-        # Updating width alone leaves area = width * height with 2 unknowns
-        with pytest.raises(ValueError, match="Cannot determine|ambiguous|under-constrained"):
-            rect.update(width=10.0)
+        # Updating width propagates to area (height stays unchanged)
+        rect.update(width=10.0)
+        assert rect.width == 10.0
+        assert rect.height == 3.0  # Unchanged
+        assert rect.area == 30.0  # Propagated forward
 
     def test_update_nonexistent_field(self) -> None:
         """Test updating a field that doesn't exist raises error."""
