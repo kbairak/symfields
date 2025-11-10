@@ -669,15 +669,11 @@ class TestAnnotatedCastFunctions:
             rate: Decimal = S
             time: Decimal = S
             # Compound interest: A = P(1 + r)^t
-            amount: Annotated[Decimal, cast_3_places] = (
-                S("principal") * (1 + S("rate")) ** S("time")
+            amount: Annotated[Decimal, cast_3_places] = S("principal") * (1 + S("rate")) ** S(
+                "time"
             )
 
-        c = Compound(
-            principal=Decimal("1000"),
-            rate=Decimal("0.05"),
-            time=Decimal("2")
-        )
+        c = Compound(principal=Decimal("1000"), rate=Decimal("0.05"), time=Decimal("2"))
 
         # 1000 * 1.05^2 = 1102.5
         assert c.amount == Decimal("1102.500")
@@ -702,11 +698,13 @@ class TestAnnotatedCastFunctions:
 
         # Python's typing module raises error for missing annotation
         with pytest.raises(TypeError, match="at least two arguments"):
+
             class Bad1(SymFields):
                 x: Annotated[Decimal] = S  # type: ignore[valid-type]  # Missing cast function (intentional for test)
 
         # Extra arguments are allowed by typing module, but our validation will catch it
         with pytest.raises(TypeError, match="must have exactly 2 arguments"):
+
             class Bad2(SymFields):
                 x: Annotated[Decimal, lambda v: v, "extra"] = S  # Too many args
 
@@ -714,10 +712,12 @@ class TestAnnotatedCastFunctions:
         """Test that Annotated with non-callable raises TypeError."""
 
         with pytest.raises(TypeError, match="must be callable"):
+
             class BadCallable(SymFields):
                 x: Annotated[Decimal, "not_a_function"] = S
 
         with pytest.raises(TypeError, match="must be callable"):
+
             class BadCallable2(SymFields):
                 x: Annotated[Decimal, 123] = S
 
@@ -725,14 +725,17 @@ class TestAnnotatedCastFunctions:
         """Test that cast function must have exactly 1 required parameter."""
 
         with pytest.raises(TypeError, match="must have exactly 1 required parameter"):
+
             class NoParams(SymFields):
                 x: Annotated[Decimal, lambda: Decimal("0")] = S
 
         with pytest.raises(TypeError, match="must have exactly 1 required parameter"):
+
             class TwoParams(SymFields):
                 x: Annotated[Decimal, lambda a, b: Decimal(a)] = S
 
         # Optional parameters should be rejected too (no defaults allowed)
         with pytest.raises(TypeError, match="must have exactly 1 required parameter"):
+
             class OptionalParam(SymFields):
                 x: Annotated[Decimal, lambda a, b=1: Decimal(a)] = S

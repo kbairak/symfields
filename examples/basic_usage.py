@@ -1,13 +1,13 @@
 """Basic usage examples for SymFields library."""
 
-from symfields import SymFields, S
+from symfields import S, SymFields
 
 
 # Example 1: Simple sum
 class Sum(SymFields):
     a: float
     b: float
-    c: float = S('a') + S('b')
+    c: float = S("a") + S("b")
 
 
 print("Example 1: Simple Sum")
@@ -29,7 +29,7 @@ print()
 class Rectangle(SymFields):
     width: float
     height: float
-    area: float = S('width') * S('height')
+    area: float = S("width") * S("height")
 
 
 print("Example 2: Rectangle")
@@ -47,7 +47,7 @@ print()
 # Example 3: Temperature conversion (Celsius to Fahrenheit)
 class Temperature(SymFields):
     celsius: float
-    fahrenheit: float = S('celsius') * 9/5 + 32
+    fahrenheit: float = S("celsius") * 9 / 5 + 32
 
 
 print("Example 3: Temperature Conversion")
@@ -69,8 +69,8 @@ print()
 class Physics(SymFields):
     distance: float
     speed: float
-    time: float = S('distance') / S('speed')
-    average_speed: float = S('distance') / S('time')
+    time: float = S("distance") / S("speed")
+    average_speed: float = S("distance") / S("time")
 
 
 print("Example 4: Multiple Rules (Distance, Speed, Time)")

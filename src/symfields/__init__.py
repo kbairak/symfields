@@ -406,7 +406,6 @@ class SymFields:
                     eq_symbols = {str(s) for s in eq.free_symbols}
                     rhs_symbols = eq_symbols - {lhs_field}
 
-
                     # Forward: if LHS unchanged and all RHS known and at least one RHS changed
                     if (
                         lhs_field not in changed
@@ -445,7 +444,6 @@ class SymFields:
                     eq_symbols = {str(s) for s in eq.free_symbols}
                     rhs_symbols = eq_symbols - {lhs_field}
 
-
                     # If LHS is changed, check for invertible rules
                     if lhs_field in changed:
                         unknown_rhs = rhs_symbols - changed
@@ -457,7 +455,6 @@ class SymFields:
                             # Substitute known values (changed fields + LHS)
                             known_symbols = (changed & rhs_symbols) | {lhs_field}
                             subs = {Symbol(k): values[k] for k in known_symbols}
-
 
                             # Solve for the unknown field
                             solutions_list = solve(eq.subs(subs), Symbol(unknown_field))
