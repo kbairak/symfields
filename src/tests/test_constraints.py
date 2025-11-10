@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Annotated, Any
 
 import pytest
-from sympy import cos, exp, log, pi, sin, sqrt
+from sympy import exp, pi, sin, sqrt
 
 from symfields import S, SymFields
 
@@ -17,7 +17,7 @@ class TestBasicConstraints:
         """Test constraint that filters to positive solution."""
 
         class Foo(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") ** 2
 
             __constraints__ = (S("a") > 0,)
@@ -31,7 +31,7 @@ class TestBasicConstraints:
         """Test constraint that filters to negative solution."""
 
         class Foo(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") ** 2
 
             __constraints__ = (S("a") < 0,)
@@ -45,7 +45,7 @@ class TestBasicConstraints:
         """Test that constraints work when calculating forward."""
 
         class Foo(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") ** 2
 
             __constraints__ = (S("a") > 0,)
@@ -59,7 +59,7 @@ class TestBasicConstraints:
         """Test that providing a value violating constraint raises error."""
 
         class Foo(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") ** 2
 
             __constraints__ = (S("a") > 0,)
@@ -72,7 +72,7 @@ class TestBasicConstraints:
         """Test error when no solutions satisfy the constraint."""
 
         class Foo(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") ** 2
 
             __constraints__ = (S("a") > 5,)
@@ -85,7 +85,7 @@ class TestBasicConstraints:
         """Test multiple constraints together."""
 
         class Foo(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") ** 2
 
             __constraints__ = (
@@ -101,7 +101,7 @@ class TestBasicConstraints:
         """Test constraint that defines a range."""
 
         class Foo(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") ** 2
 
             __constraints__ = (
@@ -159,8 +159,8 @@ class TestMultivariateConstraints:
         """Test constraint filtering when solving for multiple unknowns."""
 
         class MultiUnknown(SymFields):
-            x: float
-            y: float
+            x: float = S
+            y: float = S
             z: float = S("x") + S("y")
 
             __constraints__ = (S("x") > 0,)
@@ -432,7 +432,7 @@ class TestConstraintErrorMessages:
         """Test that error shows candidate solutions when filtering."""
 
         class Foo(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") ** 2
 
             __constraints__ = (S("a") > 10,)
@@ -453,7 +453,7 @@ class TestEmptyAndEdgeCaseConstraints:
         """Test that empty constraints work like no constraints."""
 
         class NoConstraints(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") ** 2
 
             __constraints__ = ()
@@ -461,7 +461,7 @@ class TestEmptyAndEdgeCaseConstraints:
         # Should pick first solution (likely -2 or 2)
         nc = NoConstraints(b=4)
         assert nc.b == 4
-        assert nc.a ** 2 == 4
+        assert nc.a**2 == 4
 
     def test_no_constraints_attribute(self) -> None:
         """Test class without __constraints__ attribute."""
@@ -479,7 +479,7 @@ class TestEmptyAndEdgeCaseConstraints:
         """Test constraint that is always true."""
 
         class AlwaysTrue(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") ** 2
 
             __constraints__ = (S("a") ** 2 >= 0,)  # Always true
@@ -492,7 +492,7 @@ class TestEmptyAndEdgeCaseConstraints:
         """Test constraint that is always false."""
 
         class AlwaysFalse(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") ** 2
 
             __constraints__ = (S("a") > S("a"),)  # Always false
@@ -505,7 +505,7 @@ class TestEmptyAndEdgeCaseConstraints:
         """Test case where equation has single solution that satisfies constraint."""
 
         class Linear(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") + 1
 
             __constraints__ = (S("a") > 0,)
@@ -526,7 +526,7 @@ class TestConstraintsWithAnnotated:
             return Decimal(str(value)).quantize(Decimal("0.01"))
 
         class WithDecimal(SymFields):
-            a: float
+            a: float = S
             b: Annotated[Decimal, cast_2_places] = S("a") ** 2
 
             __constraints__ = (S("a") > 0,)
@@ -612,7 +612,7 @@ class TestConstraintEvaluation:
         """Test constraint using equality."""
 
         class WithEquality(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") ** 2
 
             __constraints__ = (S("a") >= 2,)
@@ -625,7 +625,7 @@ class TestConstraintEvaluation:
         """Test constraint with <= or <."""
 
         class Bounded(SymFields):
-            a: float
+            a: float = S
             b: float = S("a") ** 2
 
             __constraints__ = (S("a") <= 0,)

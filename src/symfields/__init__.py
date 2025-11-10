@@ -2,12 +2,12 @@
 
 import inspect
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Annotated, Any, TypeVar, Union, get_args, get_origin
 
 from sympy import Eq, Expr, Symbol, solve
-from typing_extensions import dataclass_transform
+from typing_extensions import Self, dataclass_transform
 
 __all__ = ["S", "SymFields", "replace"]
 
@@ -114,6 +114,8 @@ class SymFields:
         understand that these fields can be passed as keyword arguments.
     """
 
+    __constraints__: Sequence[Expr]
+
     def update(self, **kwargs: Any) -> None:
         """Update field values and propagate changes through the constraint system."""
         ...  # Implementation added by __init_subclass__
@@ -136,7 +138,7 @@ class SymFields:
                         f"(type and callable), got {len(args)}"
                     )
 
-                _base_type, cast_func = args
+                _, cast_func = args
 
                 # Second arg must be callable
                 if not callable(cast_func):
@@ -156,7 +158,7 @@ class SymFields:
                     )
 
         # Extract constraints if present
-        constraints = tuple()
+        constraints = ()
         if hasattr(cls, "__constraints__"):
             constraints = tuple(cls.__constraints__)
             delattr(cls, "__constraints__")
@@ -196,7 +198,7 @@ class SymFields:
         dataclass(cls, frozen=False)
         original_init = cls.__init__
 
-        def __init__(self: SymFields, **kwargs: Any) -> None:
+        def __init__(self: Self, **kwargs: Any) -> None:
             known_fields = set(kwargs)
             unknown_fields = set(cls.__annotations__) - known_fields
 
@@ -208,7 +210,8 @@ class SymFields:
             # Apply constraint filtering if constraints are defined
             # Only filter when there are multiple solutions; single solutions are validated later
             # Note: if solutions_list is a dict (single solution), don't filter
-            if constraints and solutions_list and isinstance(solutions_list, list) and len(solutions_list) > 1:
+            has_multiple_solutions = isinstance(solutions_list, list) and len(solutions_list) > 1
+            if constraints and solutions_list and has_multiple_solutions:
                 filtered_solutions = []
                 failed_info = []
 
@@ -231,9 +234,12 @@ class SymFields:
 
                     for constraint in constraints:
                         try:
-                            result = constraint.subs(complete_solution)
+                            result = constraint.subs(complete_solution)  # type: ignore
                             # Evaluate the constraint - be strict
-                            if result is False or (hasattr(result, '__bool__') and not bool(result)):
+                            is_false = result is False or (
+                                hasattr(result, "__bool__") and not bool(result)
+                            )
+                            if is_false:
                                 all_satisfied = False
                                 failed_constraints.append(str(constraint))
                         except Exception:
@@ -249,10 +255,9 @@ class SymFields:
                         )
 
                 if not filtered_solutions:
-                    constraint_str = ', '.join(str(c) for c in constraints)
+                    constraint_str = ", ".join(str(c) for c in constraints)
                     error_msg = (
-                        f"No solutions satisfy all constraints.\n"
-                        f"Constraints: [{constraint_str}]"
+                        f"No solutions satisfy all constraints.\nConstraints: [{constraint_str}]"
                     )
                     if failed_info:
                         error_msg += "\n" + "\n".join(failed_info)
@@ -278,7 +283,7 @@ class SymFields:
 
                 # Check if using Annotated with cast function
                 if get_origin(annotation) is Annotated:
-                    _base_type, cast_func = get_args(annotation)
+                    _, cast_func = get_args(annotation)
                     kwargs[field_name] = cast_func(value)
                 else:
                     # Current behavior
@@ -368,7 +373,7 @@ class SymFields:
 
             # Propagation loop - forward and backward passes
             max_iterations = 100  # Safety limit
-            for _iteration in range(max_iterations):
+            for _ in range(max_iterations):
                 progress = False
 
                 # Forward pass: solve for LHS fields that aren't changed yet
@@ -398,7 +403,7 @@ class SymFields:
                         # Apply cast function if using Annotated
                         annotation = cls.__annotations__[lhs_field]
                         if get_origin(annotation) is Annotated:
-                            _base_type, cast_func = get_args(annotation)
+                            _, cast_func = get_args(annotation)
                             values[lhs_field] = cast_func(new_value)
                         else:
                             try:
@@ -444,15 +449,21 @@ class SymFields:
                                         filtered_solutions = []
                                         for sol in real_solutions:
                                             # Create complete solution for constraint checking
-                                            complete_solution = {Symbol(k): v for k, v in values.items()}
+                                            complete_solution = {
+                                                Symbol(k): v for k, v in values.items()
+                                            }
                                             complete_solution[Symbol(unknown_field)] = sol
 
                                             # Check all constraints
                                             all_satisfied = True
                                             for constraint in constraints:
                                                 try:
-                                                    result = constraint.subs(complete_solution)
-                                                    if result is False or (hasattr(result, '__bool__') and not bool(result)):
+                                                    result = constraint.subs(complete_solution)  # type: ignore
+                                                    has_bool = hasattr(result, "__bool__")
+                                                    is_false = result is False or (
+                                                        has_bool and not bool(result)
+                                                    )
+                                                    if is_false:
                                                         all_satisfied = False
                                                         break
                                                 except Exception:
@@ -482,7 +493,7 @@ class SymFields:
                                 # Apply cast function if using Annotated
                                 annotation = cls.__annotations__[unknown_field]
                                 if get_origin(annotation) is Annotated:
-                                    _base_type, cast_func = get_args(annotation)
+                                    _, cast_func = get_args(annotation)
                                     values[unknown_field] = cast_func(solution)
                                 else:
                                     try:
@@ -551,7 +562,7 @@ class SymFields:
                 # Apply cast function to rhs_value if field has Annotated type
                 annotation = cls.__annotations__[field_name]
                 if get_origin(annotation) is Annotated:
-                    _base_type, cast_func = get_args(annotation)
+                    _, cast_func = get_args(annotation)
                     rhs_value = cast_func(rhs_value)
 
                 # Convert to floats for comparison
@@ -603,13 +614,14 @@ class SymFields:
                     validation_errors.append("\n".join(error_info))
 
             # Validate constraints
+            constraint: Expr
             for constraint in constraints:
                 # Substitute field values into constraint
                 subs_dict = {Symbol(k): v for k, v in values.items()}
                 try:
-                    result = constraint.subs(subs_dict)
+                    result: Any = constraint.subs(subs_dict)  # type: ignore
                     # Evaluate the constraint - be strict
-                    is_satisfied = result is True or (hasattr(result, '__bool__') and bool(result))
+                    is_satisfied = result is True or (hasattr(result, "__bool__") and bool(result))
 
                     if not is_satisfied:
                         error_info = [
