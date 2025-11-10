@@ -543,6 +543,9 @@ class TestReplace:
         original = Rectangle(width=5.0, height=3.0)
 
         # Replacing only area is ambiguous - can't determine width/height
-        # This will fail during __init__ when trying to solve the system
-        with pytest.raises(ValueError, match=r"Cannot calculate all fields|Validation failed"):
+        # This will fail during .update() when trying to propagate changes
+        with pytest.raises(
+            ValueError,
+            match=r"Cannot calculate all fields|Cannot determine values|Validation failed",
+        ):
             replace(original, area=30.0)

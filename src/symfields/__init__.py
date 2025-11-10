@@ -588,24 +588,11 @@ def replace(obj: T, **kwargs: Any) -> T:
         Like dataclasses.replace(), this always returns a new instance,
         even if no fields are changed.
     """
-    # Identify derived fields (fields that are LHS of equations)
-    derived_fields = {str(eq.lhs) for eq in type(obj)._equations}
-    derived_fields |= set(type(obj)._lambdas.keys())
+    # Create a copy with all current field values
+    new_obj = type(obj)(**{field: getattr(obj, field) for field in obj.__annotations__})
 
-    # Get independent fields (fields that are not derived)
-    independent_fields = set(obj.__annotations__) - derived_fields
+    # Update the copy with new values (if any provided)
+    if kwargs:
+        new_obj.update(**kwargs)
 
-    # Check if we're replacing any derived fields
-    replacing_derived = bool(set(kwargs.keys()) & derived_fields)
-
-    if replacing_derived:
-        # If replacing derived fields, ONLY pass kwargs (let constructor solve backward)
-        # Don't include original independent values as they may conflict
-        init_kwargs = dict(kwargs)
-    else:
-        # If only replacing independent fields, pass all independent fields
-        init_kwargs = {field: getattr(obj, field) for field in independent_fields}
-        init_kwargs.update(kwargs)
-
-    # Create new instance - this will trigger constraint propagation
-    return type(obj)(**init_kwargs)
+    return new_obj
