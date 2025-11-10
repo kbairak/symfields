@@ -5,8 +5,8 @@ from symfields import S, SymFields
 
 # Example 1: Simple sum
 class Sum(SymFields):
-    a: float
-    b: float
+    a: float = S
+    b: float = S
     c: float = S("a") + S("b")
 
 
@@ -27,8 +27,8 @@ print()
 
 # Example 2: Rectangle area
 class Rectangle(SymFields):
-    width: float
-    height: float
+    width: float = S
+    height: float = S
     area: float = S("width") * S("height")
 
 
@@ -46,7 +46,7 @@ print()
 
 # Example 3: Temperature conversion (Celsius to Fahrenheit)
 class Temperature(SymFields):
-    celsius: float
+    celsius: float = S
     fahrenheit: float = S("celsius") * 9 / 5 + 32
 
 
@@ -67,8 +67,8 @@ print()
 
 # Example 4: Multiple rules
 class Physics(SymFields):
-    distance: float
-    speed: float
+    distance: float = S
+    speed: float = S
     time: float = S("distance") / S("speed")
     average_speed: float = S("distance") / S("time")
 

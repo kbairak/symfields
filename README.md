@@ -50,10 +50,11 @@ s = Sum(b=2.0, c=3.0)
 - **Complex expressions**: Handles combined operations like `d = a + b * c`
 - **Multiple rules**: Define multiple relationships in a single class
 - **Chained dependencies**: Rules that depend on other computed fields
+- **Constraints**: Use `__constraints__` to filter solutions (e.g., enforce `a > 0` when solving `a² = b`)
 - **Dataclass integration**: Instances behave like dataclasses with nice `repr`, equality, etc.
 - **Type checker friendly**: Optional `= S` pattern helps mypy understand dynamic keyword arguments
 - **IDE support**: Field annotations enable autocomplete in your IDE
-- **Validation**: Automatically validates that all provided values satisfy the rules
+- **Validation**: Automatically validates that all provided values satisfy the rules and constraints
 - **Flexible rules**: Use sympy expressions (invertible) or lambdas/callables (forward-only) for any type
 - **Precision control**: Use `Annotated` types with custom cast functions to control decimal precision and rounding
 - **Field updates**: Use `.update()`, direct assignment (`obj.field = value`), or `replace(obj, field=value)` for updates
@@ -213,6 +214,97 @@ class Invoice(SymFields):
 
 **Note:** The cast function must accept exactly one parameter (the value to cast). It's applied both when solving fields and during validation.
 
+**Constraining Solutions with __constraints__**
+
+When equations have multiple solutions, you can use `__constraints__` to specify which solution is valid. This is particularly useful for equations like `b = a²` where solving for `a` gives both positive and negative solutions:
+
+```python
+class Foo(SymFields):
+    a: float
+    b: float = S('a') ** 2
+
+    __constraints__ = (
+        S('a') > 0,
+    )
+
+# With b=4, a could be 2 or -2, but constraint forces a=2
+f = Foo(b=4)
+# Foo(a=2.0, b=4)
+
+# Forward calculation still works
+f = Foo(a=3)
+# Foo(a=3, b=9.0)
+```
+
+Constraints support any inequality or relational expression that sympy can evaluate:
+
+```python
+class BoundedValue(SymFields):
+    x: float
+    y: float = S('x') ** 2
+
+    __constraints__ = (
+        S('x') >= 0,      # Greater than or equal
+        S('x') < 10,      # Less than
+        S('y') <= 100,    # Computed field constraints
+    )
+
+BoundedValue(y=25)   # BoundedValue(x=5.0, y=25)
+BoundedValue(y=121)  # ValueError: Constraint violated
+```
+
+**Multivariate constraints** involving multiple fields are also supported:
+
+```python
+class Triangle(SymFields):
+    a: float
+    b: float
+    c: float = S(sqrt(S('a')**2 + S('b')**2))
+
+    __constraints__ = (
+        S('a') > 0,
+        S('b') > 0,
+        S('a') + S('b') > S('c'),  # Triangle inequality
+    )
+```
+
+**Advanced constraint examples:**
+
+```python
+from sympy import sin, cos, pi
+
+class Physics(SymFields):
+    angle: float
+    velocity: float
+    range_distance: float = S('velocity')**2 * sin(2*S('angle')) / 9.81
+
+    __constraints__ = (
+        S('angle') >= 0,
+        S('angle') <= pi/2,  # Keep angle in first quadrant
+        S('velocity') > 0,
+    )
+```
+
+**How constraints work:**
+
+1. **During solving**: When multiple solutions exist (e.g., `a² = 4` → `a = ±2`), constraints filter to valid solutions
+2. **During validation**: After all fields are calculated, constraints are validated on the final state
+3. **With updates**: Constraints are respected when using `.update()`, `__setattr__`, or `replace()`
+
+If no solutions satisfy all constraints, a detailed error message shows which constraints failed:
+
+```python
+class Foo(SymFields):
+    a: float
+    b: float = S('a') ** 2
+    __constraints__ = (S('a') > 10,)
+
+Foo(b=4)  # ValueError: No solutions satisfy all constraints.
+          # Constraints: [a > 10]
+          #   Solution {a: -2} failed: a > 10
+          #   Solution {a: 2} failed: a > 10
+```
+
 **Updating Fields After Creation**
 
 You can update fields after instance creation using the `.update()` method. Changes propagate automatically through the constraint system:
@@ -311,20 +403,23 @@ SymFields uses **[sympy](https://www.sympy.org/)** to solve systems of equations
 
 **At class definition time** (in `__init_subclass__`):
 1. Extracts symbolic expressions and lambdas from field defaults
-2. Validates lambda signatures (parameters must match field names)
-3. Validates `Annotated` cast functions (must have exactly one parameter)
-4. Stores the equations for solving at instance creation
+2. Extracts constraints from `__constraints__` if present
+3. Validates lambda signatures (parameters must match field names)
+4. Validates `Annotated` cast functions (must have exactly one parameter)
+5. Stores the equations and constraints for solving at instance creation
 
 **At instance creation time** (in `__init__`):
 1. Takes the fields you provide as known values
 2. **Solves all sympy equations as a system** using `sympy.solve()` with all unknowns at once
    - Example: Given `top_speed` and `distance`, solves for both `acceleration` and `time` simultaneously
    - Filters for real-valued solutions when multiple solutions exist (e.g., complex roots)
+   - **Applies constraint filtering** when multiple solutions exist (e.g., `a² = 4` → filters to `a = 2` if constraint is `a > 0`)
    - Applies `Annotated` cast functions to solved values for precision control
 3. **Evaluates lambdas iteratively** (forward-only, cannot be inverted)
    - Calculates lambda fields once their dependencies are known
-4. **Validates all rules** to ensure consistency
+4. **Validates all rules and constraints** to ensure consistency
    - Re-evaluates all equations and lambdas with the final values
+   - Verifies all constraints are satisfied on the final state
    - Applies cast functions during validation to ensure consistency
    - Reports detailed errors if any constraints are violated
 
