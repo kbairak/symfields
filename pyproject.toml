@@ -1,0 +1,21 @@
+[project]
+name = "symfields"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Konstantinos Bairaktaris", email = "k.bairaktaris@withplum.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "sympy>=1.14.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
